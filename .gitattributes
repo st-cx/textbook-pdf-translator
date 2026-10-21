@@ -1,0 +1,7 @@
+* text=auto eol=lf
+# Renderer/source identities bind exact bytes; preserve the accepted core snapshot
+# on every checkout instead of silently changing its Windows line endings.
+textbook_pdf/** -text whitespace=cr-at-eol,-blank-at-eof
+*.pdf binary
+*.png binary
+*.bat text eol=crlf

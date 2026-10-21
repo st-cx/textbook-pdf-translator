@@ -1,0 +1,12 @@
+{
+  "_default": "example",
+  "providers": {
+    "example": {
+      "base_url": "https://api.example.com/v1",
+      "api_key": "FILL_LOCALLY",
+      "model": "your-model",
+      "price_in": 2.0,
+      "price_out": 8.0
+    }
+  }
+}

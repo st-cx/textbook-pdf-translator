@@ -1,0 +1,107 @@
+{
+  "scope": "原创合成Book/Store重排演示；非端到端OCR、解析或机器翻译评测",
+  "content_authorship": "新编英文、对应人工中文和简单公式/代码；无教材来源",
+  "updated_utc": "2026-10-21T13:25:25.673332+00:00",
+  "source_preview": {
+    "path": "generated/source-preview.png",
+    "sha256": "d1642f38d0b021f76e8a76c27f37ad8fe498c580ce227c1b0a909dfa13dc88ff"
+  },
+  "source_native_preview_directly_viewed": true,
+  "source_native_preview_matches_actual_pdf": true,
+  "input_pdfs": [
+    {
+      "path": "generated/original-counting-en.pdf",
+      "sha256": "d0f51ed0f4151fde011c15404bc9a386fcacc5c1abdf7173d52f3709bacc921b"
+    },
+    {
+      "path": "generated/original-counting-image-only.pdf",
+      "sha256": "7e3130838283772ea2da5fd7a87b5848bdffb29989d7cd4bbae5ec23e4c34937"
+    }
+  ],
+  "native_source_text_characters": 1122,
+  "image_only_source_text_characters": 0,
+  "image_only_source_outline_entries": 0,
+  "image_only_input_image_matches_original_raster_RGB": true,
+  "current_output_reviews": [
+    {
+      "variant": "native",
+      "pdf": {
+        "path": "generated/native/counting-native-zh.pdf",
+        "sha256": "01c96263fcac780ae472badc838a7dfe7e0dee30f79ad21ed00115ecb2f3556d"
+      },
+      "preview": {
+        "path": "generated/native/preview-001.png",
+        "sha256": "5ad72cddb8c09cd8d73e2c0312805901401ef7113f9f1290cd4c92bfe4ac1bb3"
+      },
+      "directly_visually_reviewed": true,
+      "preview_pixels_match_current_pdf": true,
+      "render_binding_matches_current_book_translations_renderer": true,
+      "output_pages": 1,
+      "source_page_label": "原书 p.1",
+      "body_font_pt": 10.5,
+      "exercise_font_pt": 9.5,
+      "caption_footnote_font_pt": 8.5,
+      "protected_formula_count": 3,
+      "protected_code_count": 1,
+      "protected_asset_pixel_passed": 4,
+      "protected_asset_pixel_checked": 4,
+      "qa_errors": 0,
+      "qa_warnings": 0,
+      "fonts": [
+        "Courier",
+        "Helvetica",
+        "RYZCGL+NotoSansSC-Thin",
+        "Times-Italic",
+        "Times-Roman",
+        "WTZXEX+NotoSerifSC-ExtraLight"
+      ],
+      "conclusion": "标题、9条自有译文、两个行内公式、完整分式、五行代码与图注、小练习/脚注均可读；未见遮挡、丢行、乱码或异常小字。代码原尺寸和缩进不变，中文重排保持自然留白。"
+    },
+    {
+      "variant": "raster",
+      "pdf": {
+        "path": "generated/raster/counting-raster-zh.pdf",
+        "sha256": "7eeedbfdc32f80e4202af6386875053c044d0be9920e7d194fecdbec97eb5c33"
+      },
+      "preview": {
+        "path": "generated/raster/preview-001.png",
+        "sha256": "db08f593b900827e362f1d7f4fdca84c0451b05bdd523faf05542e9b3bfd0dfb"
+      },
+      "directly_visually_reviewed": true,
+      "preview_pixels_match_current_pdf": true,
+      "render_binding_matches_current_book_translations_renderer": true,
+      "output_pages": 1,
+      "source_page_label": "原书 p.1",
+      "body_font_pt": 10.5,
+      "exercise_font_pt": 9.5,
+      "caption_footnote_font_pt": 8.5,
+      "protected_formula_count": 3,
+      "protected_code_count": 1,
+      "protected_asset_pixel_passed": 4,
+      "protected_asset_pixel_checked": 4,
+      "qa_errors": 0,
+      "qa_warnings": 0,
+      "fonts": [
+        "RYZCGL+NotoSansSC-Thin",
+        "WTZXEX+NotoSerifSC-ExtraLight"
+      ],
+      "conclusion": "标题、9条自有译文、两个行内公式、完整分式、五行代码与图注、小练习/脚注均可读；未见遮挡、丢行、乱码或异常小字。代码原尺寸和缩进不变，中文重排保持自然留白。"
+    }
+  ],
+  "semantic_review": "由同一作者重新核对9组英中内容与公式意义；非独立盲测或模型质量计分。原英文与译文均全新创作。",
+  "math_sanity_check": "直接循环累加与闭式n*(n+1)//2在正整数1..100一致",
+  "external_translation_api_calls": 0,
+  "OCR_or_layout_model_calls": 0,
+  "copied_font_or_model_files": [],
+  "known_limits": [
+    "从作者清单直接建立Book坐标；没有测试自动抽取、OCR或布局检测。",
+    "没有逐像素复制输入页的装饰条、页眉或英文页脚。",
+    "固定字号流式重排后保留自然留白，不拉伸段落充满原页。",
+    "生成成功、像素通过和本小样本目视检查不代表大型教材、真实扫描噪声或多章一致性已经验收。",
+    "重建后的PDF哈希可能变化，必须重新检查；本记录只绑定列出的当前文件。"
+  ],
+  "reproducible_script": {
+    "path": "build_demo.py",
+    "sha256": "bde43cc9007d504fb0fe909c83dd7eec0a9bc89ffb24668c5df8cf4acc06f46f"
+  }
+}

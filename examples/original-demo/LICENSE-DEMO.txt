@@ -1,0 +1,7 @@
+Original synthetic demo dedication
+
+To the extent possible under law, the authors dedicate the newly written demo prose, Chinese translations, simple formula drawings and build_demo.py in this directory to the public domain under CC0 1.0 Universal (CC0-1.0).
+
+No textbook pages or excerpts are included. No standalone font files, model weights or credentials are included. This dedication does not change the licenses of the PDF translation tool, PyMuPDF, Typst, Noto fonts or any other dependency. PDF renderings may embed necessary glyph subsets of locally installed open fonts.
+
+Scope: the original demo content and script in this original-demo example directory only. Generated Book/Store examples call the separately licensed tool through its public interfaces.

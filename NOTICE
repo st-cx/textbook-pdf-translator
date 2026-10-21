@@ -1,0 +1,19 @@
+Textbook PDF Translator
+Copyright (C) 2026 st-cx and contributors
+
+Project-authored code is licensed under GNU AGPL version 3 or later,
+except the explicitly marked original demonstration material and its generator
+under examples/original-demo, which are dedicated under CC0-1.0.
+Dependencies, external model weights, fonts and tools retain their respective
+licenses. See THIRD_PARTY.md. No model weights or operating-system fonts are
+distributed in this source repository.
+
+BabelDOC: AGPL-3.0; imported pinned dependency, not vendored.
+PyMuPDF: AGPL-3.0 / commercial upstream licensing.
+Typst: Apache-2.0; downloaded separately from its official release.
+PDFMathTranslate-next: AGPL-3.0; design reference, no source vendored.
+RapidOCR: Apache-2.0; model provenance is recorded separately.
+
+The Pix2Text MFD artifact has conflicting upstream license declarations
+(MIT in its model card and AGPL-3.0 in its ONNX metadata). This project records
+both and does not redistribute or relicense that weight file. See THIRD_PARTY.md.

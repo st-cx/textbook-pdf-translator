@@ -1,0 +1,73 @@
+{
+  "license": "CC0-1.0",
+  "origin": "new original synthetic demo; no textbook source",
+  "english": {
+    "title": "A small counting experiment",
+    "intro": "A walking robot leaves one marker at its first stop, two markers at its next stop, and one more at each later stop. We want a quick way to count the markers without drawing every stop.",
+    "definition": "Let ⟦F:demo-n⟧ be the number of stops, and let ⟦F:demo-s⟧ be the total marker count. The following rule gives the answer.",
+    "reason": "Read the product before dividing: pair the first short row with a reversed copy of the last long row. Every pair has the same length, so the rearranged picture forms a rectangle. Each original picture occupies half of that rectangle.",
+    "code-title": "Check the idea with a loop",
+    "caption": "Listing 1. A direct count used to check the rule.",
+    "conclusion": "The formula and the loop count the same arrangement in different ways. The formula avoids visiting every stop; the loop makes the counting process easy to inspect.",
+    "exercise": "Try it: use four stops, and explain why two copies of the pattern always make a rectangle.",
+    "note": "This page was written from scratch for a layout demonstration."
+  },
+  "chinese": {
+    "title": "一个计数小实验",
+    "intro": "一个行走机器人在首次停靠时留下一个标记，在下一次停靠时留下两个标记，此后每次都比上次多留一个。我们希望找到一种快速计数的方法，不必把每次停靠都画出来。",
+    "definition": "用 ⟦F:demo-n⟧ 表示停靠次数，用 ⟦F:demo-s⟧ 表示标记总数。下面的规则给出答案。",
+    "reason": "先看乘积，再做除法：把最短的一行与另一份反向排列图案中最长的一行配对。每一对都一样长，因此重新组合后形成矩形。每份原图恰好占这个矩形的一半。",
+    "code-title": "用循环检验这个想法",
+    "caption": "代码1：通过直接计数检验规则。",
+    "conclusion": "公式和循环用不同的方法计算同一个排列中的标记数。公式无需逐次访问所有停靠点；循环则让计数过程便于检查。",
+    "exercise": "试一试：采用四次停靠，解释为什么两份图案总能拼成一个矩形。",
+    "note": "本页为排版演示全新编写，未摘录教材。"
+  },
+  "preserved_code": "def triangular(stops):\n    total = 0\n    for step in range(1, stops + 1):\n        total += step\n    return total",
+  "formula_asset_specs": {
+    "demo-n": {
+      "kind": "formula",
+      "bbox": [
+        60.91399981975555,
+        168.6,
+        67.36399981975555,
+        181.8
+      ],
+      "baseline": 10.4,
+      "text": "n"
+    },
+    "demo-s": {
+      "kind": "formula",
+      "bbox": [
+        216.75499864816666,
+        168.6,
+        235.44799873828887,
+        181.8
+      ],
+      "baseline": 10.4,
+      "text": "S(n)"
+    },
+    "demo-rule": {
+      "kind": "formula",
+      "bbox": [
+        182,
+        222,
+        297,
+        266
+      ],
+      "baseline": 26,
+      "text": "S(n) = n(n + 1) / 2"
+    },
+    "demo-code": {
+      "kind": "code",
+      "bbox": [
+        54.0,
+        395,
+        444.8976377952756,
+        486
+      ],
+      "baseline": 91,
+      "text": "def triangular(stops):\n    total = 0\n    for step in range(1, stops + 1):\n        total += step\n    return total"
+    }
+  }
+}

@@ -1,0 +1,80 @@
+{
+  "recorded_on": "2026-10-21",
+  "kind": "internal selected-sample summary, not reproducible public benchmark",
+  "private_material_distributed": false,
+  "full_book_accepted": false,
+  "controlled_competitor_benchmark": false,
+  "internal_tests": {
+    "tests": 278,
+    "passed": true,
+    "failures": [],
+    "errors": [],
+    "skips": [],
+    "seconds": 33.28129049999552,
+    "source_unchanged_during_tests": true
+  },
+  "core_source_sha256": {
+    "textbook_pdf/babel_adapter.py": "b53ec7b755f1ee3fe6532f8bc1f3a32b01f006d8f2d10c3fa2abaf81a052cca2",
+    "textbook_pdf/bootstrap.py": "384d529080217906303532e5d86243b6fb0d37e0a29c4b6a98bb2caf06bbdbe8",
+    "textbook_pdf/cli.py": "3b34e474ee7102dcf643ea5090585af238a482ae37c5fa723c6fed8f82b1a914",
+    "textbook_pdf/extraction.py": "f908d2702a591ceaaebf37d564aae323bc66a824e0ab089eb37d0f2c142a04f3",
+    "textbook_pdf/layout.py": "a94d48ea239d728573c6ed4ccf70f58632190020ad455791e830d3c5389dbab2",
+    "textbook_pdf/metrics.py": "7c436908a8260b5638fd985a84d24e8e72a903ef78fe654bd2864a1e2b4fbc57",
+    "textbook_pdf/migration.py": "fa1ce90397355784f8e4c34de28f3b32c6227616b24b687a7e0a3067f1bc5795",
+    "textbook_pdf/models.py": "cf150e72198618b315727915e08eae5333c70e2f73be9102a5c10c466b5452f9",
+    "textbook_pdf/numbers.py": "9717d1ac113ccfa5a8a0a7f3edee065d567e0632af1cd36fdc3f650770bcb205",
+    "textbook_pdf/ocr_engine.py": "4f224d2236e941b40abe70abf1d84e2cdb7e450bec149d1ee772cc5b6bc2d4a5",
+    "textbook_pdf/paragraph_adapter.py": "3b9a81650b2a9306fe384bd0760fcb455d7926ce2c162901696f344fb9c145bf",
+    "textbook_pdf/qa.py": "ff7f1b7dc3a7b51d171f2341d3f4d5abb9684914fed679bfdee9984c7a0dd2a5",
+    "textbook_pdf/scan_adapter.py": "59dd267550f498d4a99d334858a5bc3ba26df3e5c78ab7d5656fe896bca94863",
+    "textbook_pdf/scan_detectors.py": "b77703489135f13b7865cbe6a9025d794720a09fcb0ecf2401ce31bba622bcd9",
+    "textbook_pdf/scan_layout.py": "dc4c2587a81cc088b5871fda35ce9dbb3c4f0be4f9799cc26a1a6ee160f3dee7",
+    "textbook_pdf/scan_quality.py": "2f10b3111b9a40f893c9a9f226393684a06681d7f63d7d0c9a344d894fe01e56",
+    "textbook_pdf/store.py": "b234e0c15bfb1396f8ca5785743fc6fe37883642ff2a2235fd63cee1a6e010ef",
+    "textbook_pdf/table_adapter.py": "fa4bf6b848d15f7946ae2f6b085b7b5ad296c4ce4bb4863385e456b6bddc5ddf",
+    "textbook_pdf/translation.py": "9c7ce52ac3c7902851acf8d62feedd45e7ae11164df265566ac25fbb087ba6c9",
+    "textbook_pdf/visual_checks.py": "f1353bd1e0714c54db2001120d5c9e1313cc35cc7a0f767bbbca1ff9bdf7331c",
+    "textbook_pdf/__init__.py": "dd2b248edf2f9c9ca03fbb2d3a8aae6079222ae5e1aeb8117346600ae8610f86",
+    "textbook_pdf/templates/book.typ": "81bd5b1b2cb7cb6e2879618170d772e99776816c3cb60468c028fe27904b445e"
+  },
+  "installation_checks_passed": 14,
+  "scan_sample": {
+    "source_pages": 3,
+    "output_pages": 3,
+    "paper": "ISO B5 176x250mm",
+    "body_font_pt": 10.5,
+    "translated_elements": 27,
+    "independently_semantically_reviewed_elements": 27,
+    "protected_assets": 38,
+    "pixel_automatic_passed": 36,
+    "pixel_checked": 38,
+    "pixel_manual_review_items": 2,
+    "full_output_pages_directly_viewed": 3,
+    "qa_errors": 0,
+    "retained_warnings": 7,
+    "pdf_sha256": "5e5692926afbbd62a2671d9427b780922e51515acb0a854edd3778928e267190"
+  },
+  "native_samples": [
+    {
+      "name": "Rosen representative digital pages",
+      "source_pages": 24,
+      "output_pages": 25,
+      "translated_elements": 635,
+      "semantically_reviewed_elements": 458,
+      "protected_objects_automatic_pixel_passed": 796,
+      "protected_objects_checked": 796,
+      "other_explained_banners": 2,
+      "retained_warnings": 4
+    },
+    {
+      "name": "Rosen continuous digital pages",
+      "source_pages": 7,
+      "output_pages": 7,
+      "translated_elements": 142,
+      "semantically_reviewed_elements": 111,
+      "protected_objects_automatic_pixel_passed": 421,
+      "protected_objects_checked": 421,
+      "retained_warnings": 3
+    }
+  ]
+}

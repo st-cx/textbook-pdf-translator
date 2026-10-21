@@ -1,0 +1,111 @@
+{
+  "scope": "Synthetic Book/Store-to-compositor demo; not an end-to-end extraction/OCR/translation benchmark",
+  "content_license": "CC0-1.0; original text and simple mathematical drawing only",
+  "external_api_calls": 0,
+  "OCR_or_layout_model_calls": 0,
+  "source_mode": "Known authoring coordinates -> Book/Store -> actual Typst composition; synthetic raster uses same known structure, no OCR inference.",
+  "inputs": [
+    {
+      "path": "generated/original-counting-en.pdf",
+      "sha256": "d0f51ed0f4151fde011c15404bc9a386fcacc5c1abdf7173d52f3709bacc921b"
+    },
+    {
+      "path": "generated/original-counting-image-only.pdf",
+      "sha256": "7e3130838283772ea2da5fd7a87b5848bdffb29989d7cd4bbae5ec23e4c34937"
+    }
+  ],
+  "source_preview": {
+    "path": "generated/source-preview.png",
+    "sha256": "d1642f38d0b021f76e8a76c27f37ad8fe498c580ce227c1b0a909dfa13dc88ff"
+  },
+  "reproducible_script": {
+    "path": "build_demo.py",
+    "sha256": "bde43cc9007d504fb0fe909c83dd7eec0a9bc89ffb24668c5df8cf4acc06f46f"
+  },
+  "body_font": "Noto Serif SC (locally installed, not copied)",
+  "heading_font": "Noto Sans SC (locally installed, not copied)",
+  "no_standalone_font_or_model_files": true,
+  "native_source_text_characters": 1122,
+  "raster_source_text_characters": 0,
+  "raster_source_outline_entries": 0,
+  "actual_build_seconds": 2.54,
+  "variants": [
+    {
+      "variant": "native",
+      "source_pdf": "generated/original-counting-en.pdf",
+      "source_sha256": "d0f51ed0f4151fde011c15404bc9a386fcacc5c1abdf7173d52f3709bacc921b",
+      "output_pdf": "generated/native/counting-native-zh.pdf",
+      "output_sha256": "01c96263fcac780ae472badc838a7dfe7e0dee30f79ad21ed00115ecb2f3556d",
+      "output_pages": 1,
+      "source_elements": 11,
+      "accepted_authored_translations": 9,
+      "protected_assets": 4,
+      "qa_errors": 0,
+      "qa_warnings": 0,
+      "embedded_font_names": [
+        "Courier",
+        "Helvetica",
+        "RYZCGL+NotoSansSC-Thin",
+        "Times-Italic",
+        "Times-Roman",
+        "WTZXEX+NotoSerifSC-ExtraLight"
+      ],
+      "observed_chinese_font_sizes_pt": [
+        7.5,
+        8.5,
+        9.5,
+        10.5,
+        15.0
+      ],
+      "external_api_calls": 0,
+      "OCR_or_layout_model_calls": 0,
+      "protected_asset_checked": 4,
+      "protected_asset_passed": 4,
+      "preview": {
+        "path": "generated/native/preview-001.png",
+        "sha256": "5ad72cddb8c09cd8d73e2c0312805901401ef7113f9f1290cd4c92bfe4ac1bb3"
+      }
+    },
+    {
+      "variant": "raster",
+      "source_pdf": "generated/original-counting-image-only.pdf",
+      "source_sha256": "7e3130838283772ea2da5fd7a87b5848bdffb29989d7cd4bbae5ec23e4c34937",
+      "output_pdf": "generated/raster/counting-raster-zh.pdf",
+      "output_sha256": "7eeedbfdc32f80e4202af6386875053c044d0be9920e7d194fecdbec97eb5c33",
+      "output_pages": 1,
+      "source_elements": 11,
+      "accepted_authored_translations": 9,
+      "protected_assets": 4,
+      "qa_errors": 0,
+      "qa_warnings": 0,
+      "embedded_font_names": [
+        "RYZCGL+NotoSansSC-Thin",
+        "WTZXEX+NotoSerifSC-ExtraLight"
+      ],
+      "observed_chinese_font_sizes_pt": [
+        7.5,
+        8.5,
+        9.5,
+        10.5,
+        15.0
+      ],
+      "external_api_calls": 0,
+      "OCR_or_layout_model_calls": 0,
+      "protected_asset_checked": 4,
+      "protected_asset_passed": 4,
+      "preview": {
+        "path": "generated/raster/preview-001.png",
+        "sha256": "db08f593b900827e362f1d7f4fdca84c0451b05bdd523faf05542e9b3bfd0dfb"
+      }
+    }
+  ],
+  "all_output_pages_directly_reviewed": true,
+  "review_record": "generated/manual_review.json",
+  "limitations": [
+    "从作者清单直接建立Book坐标；没有测试自动抽取、OCR或布局检测。",
+    "没有逐像素复制输入页的装饰条、页眉或英文页脚。",
+    "固定字号流式重排后保留自然留白，不拉伸段落充满原页。",
+    "生成成功、像素通过和本小样本目视检查不代表大型教材、真实扫描噪声或多章一致性已经验收。",
+    "重建后的PDF哈希可能变化，必须重新检查；本记录只绑定列出的当前文件。"
+  ]
+}

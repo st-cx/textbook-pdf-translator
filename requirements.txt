@@ -1,0 +1,11 @@
+babeldoc==0.6.4
+bitstring==4.3.1
+PyMuPDF==1.28.2
+pymupdf4llm==1.28.2
+pymupdf-layout==1.28.2
+openai>=1.59.3,<4
+psutil>=6,<8
+Pillow>=11,<14
+numpy>=2,<3
+rapidocr==3.10.0
+onnxruntime==1.31.0
