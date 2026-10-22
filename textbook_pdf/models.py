@@ -55,7 +55,7 @@ def protected_asset_descriptor(asset, include_render_metadata=True):
            'height':asset.height,'baseline':asset.baseline}
     if include_render_metadata:
         value['render_metadata']={key:asset.metadata[key] for key in
-            ('pdf_page','baseline_from_top','source_segments') if key in asset.metadata}
+            ('pdf_page','baseline_from_top','source_segments','cross_page_math') if key in asset.metadata}
     return value
 
 @dataclass

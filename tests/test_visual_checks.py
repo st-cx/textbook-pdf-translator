@@ -24,6 +24,29 @@ REAL_MAP = (Path(os.environ["TEXTBOOK_TEST_LAYOUT_MAP"]).expanduser() if os.envi
 
 
 class VisualAssetTests(unittest.TestCase):
+    def test_translated_diagram_label_mask_cannot_hide_missing_arrow_or_forge_evidence(self):
+        source = np.full((120, 400), 255, dtype=np.uint8)
+        source[45:50, 140:260] = 0  # arrow outside the labels
+        target = source.copy()
+        target[20:35, 20:60] = 0   # changed translated label
+        bbox = pymupdf.Rect(10, 20, 110, 50)
+        record = {'translated_label_ids': ['start'], 'translated_label_regions_precision': 'measured-figure-labels',
+                  'translated_label_regions': [[10, 20, 30, 30]]}
+        asset = Asset('diagram', 'figure', '', 1, [0, 0, 100, 30], 100, 30, metadata={
+            'detector': 'translated-figure-background', 'detached_label_ids': ['start'],
+            'label_removal_proof': {'native_glyph_ids': ['original-start']}})
+        a, b, metrics = visual_checks._mask_figure_labels(source, target, bbox, record, asset)
+        self.assertEqual(visual_checks._compare(a, b)[0], 'passed')
+        self.assertFalse(metrics['label_semantics_certified'])
+        target[45:50, 140:260] = 255
+        a, b, _ = visual_checks._mask_figure_labels(source, target, bbox, record, asset)
+        self.assertNotEqual(visual_checks._compare(a, b)[0], 'passed')
+        for tampered in ({'translated_label_ids': ['other']},
+                         {'translated_label_regions': [[9, 20, 30, 30]]},
+                         {'translated_label_regions': [[10, 20, 110, 50]]}):
+            with self.subTest(tampered=tampered), self.assertRaises(ValueError):
+                visual_checks._mask_figure_labels(source, target, bbox, {**record, **tampered}, asset)
+
     def setUp(self):
         self.base = Path(__file__).resolve().parent / "_tmp_visual"
         self.base.mkdir(exist_ok=True)

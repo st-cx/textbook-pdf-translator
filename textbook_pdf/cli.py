@@ -9,7 +9,7 @@ import sys
 import time
 from pathlib import Path
 
-from .models import Book,TRANSLATABLE,file_sha256,needs_translation,safe_filename,digest,source_contract_issues,protected_asset_descriptor
+from .models import Book,TRANSLATABLE,TOKEN_RE,file_sha256,needs_translation,safe_filename,digest,source_contract_issues,protected_asset_descriptor
 from .store import Store,RULE_HASH_SCHEMA
 
 def parse_pages(value):
@@ -36,6 +36,80 @@ def load_glossary(path=None):
 
 def _print(data):
     print(json.dumps(data,ensure_ascii=False,indent=2,default=str),flush=True)
+
+def _source_preflight(book, outdir):
+    """Bind actual native source evidence before tasks and any paid stage.
+
+    Raster, semantic and output checks remain independent acceptance dimensions.
+    Only this gate's own old diagnostics are replaced after a source repair.
+    """
+    book.issues=[i for i in book.issues if i.get('origin')!='source_preflight']
+    page_info={p.get('number',p.get('page')):p for p in book.pages}
+    owned={aid for e in book.elements if not e.metadata.get('render_suppressed')
+           for aid in set(e.asset_ids)|set(TOKEN_RE.findall(e.text))}
+    native={aid:book.assets[aid] for aid in owned if aid in book.assets
+            and book.assets[aid].metadata.get('glyph_ids')
+            and page_info.get(book.assets[aid].page,{}).get('coverage',{}).get('basis')!='raster-ink-and-ocr-units'}
+    if not native:
+        return {'status':'not_applicable','blocked':False,'cache_reused':False,'eligible_assets':0}
+    pages=sorted({asset.page for asset in native.values()})
+    output=Path(outdir)/'source_integrity'
+    path=output/'source-native-glyph-audit.json'
+    report=None;cache_reused=False
+
+    def complete_report(value):
+        if not isinstance(value,dict) or value.get('schema_version')!=2 or value.get('read_only') is not True:
+            return False
+        if value.get('source_sha256')!=book.source_sha256 or value.get('binding_unchanged') is not True:
+            return False
+        binding=value.get('binding_start')
+        if (not isinstance(binding,dict) or binding.get('schema')!='native-glyph-audit-binding-v1'
+                or not isinstance(binding.get('signature'),str) or len(binding['signature'])!=64
+                or value.get('binding_end')!=binding):return False
+        keys=('eligible_assets','checked_assets','passed_assets','missing_glyph_assets','unverifiable_assets')
+        if any(type(value.get(k)) is not int or value[k]<0 for k in keys):return False
+        eligible,checked,passed,missing,unverifiable=(value[k] for k in keys)
+        if eligible!=len(native) or checked+unverifiable!=eligible or passed+missing!=checked:return False
+        issues=value.get('issues')
+        if not isinstance(issues,list) or any(not isinstance(i,dict) for i in issues):return False
+        verified=checked==eligible and not missing and not unverifiable
+        if value.get('all_eligible_glyph_counts_present') is not verified:return False
+        if not verified and not any(i.get('severity')=='error' for i in issues):return False
+        return True
+
+    try:
+        from .source_integrity import audit_binding,audit_native_assets
+        if path.is_file():
+            try:cached=json.loads(path.read_text(encoding='utf-8'))
+            except (OSError,ValueError,TypeError):cached=None
+            if complete_report(cached):
+                current=audit_binding(book,outdir)
+                if cached.get('binding_start')==current==cached.get('binding_end'):
+                    report=cached;cache_reused=True
+        if report is None:
+            report=audit_native_assets(book,outdir,output)
+        if not complete_report(report) or report.get('binding_start')!=report.get('binding_end'):
+            raise ValueError('Native source audit lacks complete stable evidence')
+        additions=report['issues']
+    except Exception as error:
+        additions=([dict(i) for i in report.get('issues',[]) if isinstance(i,dict)]
+                   if isinstance(report,dict) and isinstance(report.get('issues'),list) else [])
+        additions.extend({'code':'source_preflight_unavailable','severity':'error','page':page,
+                    'detail':'付费前的原生保护对象核验没有完整稳定证据；请修复源对象或台账后重试。',
+                    'error_type':type(error).__name__} for page in pages)
+        report={'eligible_assets':len(native),'checked_assets':0,'passed_assets':0,
+                'missing_glyph_assets':0,'unverifiable_assets':len(native),'status':'unavailable'}
+        cache_reused=False
+    for entry in additions:
+        value=dict(entry,origin='source_preflight')
+        book.issues.append(value)
+        # Global failures must also remove affected native pages from task packets.
+        if value.get('severity')=='error' and not value.get('page') and not value.get('element_id'):
+            book.issues.extend(dict(value,page=page) for page in pages)
+    return {'status':report.get('status'),'blocked':any(i.get('severity')=='error' for i in additions),
+            'cache_reused':cache_reused,'report_path':'source_integrity/source-native-glyph-audit.json',
+            **{k:report.get(k) for k in ('eligible_assets','checked_assets','passed_assets','missing_glyph_assets','unverifiable_assets')}}
+
 
 def main(argv=None):
     ap=argparse.ArgumentParser(description='大型教材 PDF 翻译与中文重排：公式保护、统一字号、原书页码标记')
@@ -95,6 +169,12 @@ def main(argv=None):
         if selected and selected!=book.selected_pages:raise ValueError('此目录已记录另一组页码；请使用新 --out 避免串页')
     else:raise ValueError('任务目录没有 book.json，请先 --stage analyze')
     book.issues.extend(source_contract_issues(book))
+    preflight={'status':'not_run','blocked':False}
+    if stage in {'all','translate','review'}:
+        previous_issues=digest(book.issues)
+        preflight=_source_preflight(book,out)
+        metrics['source_preflight']=preflight
+        if digest(book.issues)!=previous_issues:book.save(bookfile)
     from .translation import make_tasks
     with Store(out/'tasks.db') as store:
         previous=store.book
@@ -135,16 +215,17 @@ def main(argv=None):
                 migration_file.write_text(json.dumps(migration,ensure_ascii=False,indent=2),encoding='utf-8')
                 metrics['legacy_migration_seconds']=time.perf_counter()-t
         block_all=stage=='all' and any(i.get('severity')=='error' for i in book.issues)
-        if block_all:metrics['translation_skipped_reason']='原书解析存在阻断问题；默认全流程先生成报告，不调用付费翻译。'
+        block_paid=block_all or preflight['blocked']
+        if block_paid:metrics['translation_skipped_reason']='原书解析或原生保护对象存在阻断问题；先生成报告，不调用付费翻译或复核。'
         if args.estimate:
             chars=sum(len(e.text) for e in book.elements if needs_translation(e))
             _print({'source_pages':len(book.selected_pages),'text_characters':chars,'tasks':len(tasks),'accepted_elements':len(store.translations()),'estimate_input_tokens_without_repeated_context':round(chars/3.4),'note':'输入还包括重复术语、规则和上下文；实际时间和费用以样章日志为准，不调用API。'})
-        elif stage in {'translate','all'} and not block_all:
+        elif stage in {'translate','all'} and not block_paid:
             from .translation import run_translation
             t=time.perf_counter();result=run_translation(book,store,args.config,provider=args.provider,workers=args.workers,review_provider=args.review_provider,max_tasks=args.max_tasks,task_ids=args.task_id)
             metrics['translation_seconds']=time.perf_counter()-t
             (out/'translation_run.json').write_text(json.dumps(result,ensure_ascii=False,indent=2),encoding='utf-8')
-        if stage=='review' or (stage=='all' and args.review_provider and not block_all):
+        if (stage=='review' or (stage=='all' and args.review_provider)) and not block_paid:
             from .translation import run_review
             t=time.perf_counter();result=run_review(book,store,args.config,provider=args.review_provider or args.provider,max_elements=args.max_tasks,workers=args.workers)
             metrics['review_seconds']=time.perf_counter()-t
@@ -152,7 +233,7 @@ def main(argv=None):
         store.reconcile_diagnostics()
         pdfout=out/(safe_filename(book.title)+'_中文阅读版.pdf')
         layout_failure=None
-        diagnostic_errors=sum(i.get('severity')=='error' for i in book.issues) if stage in {'analyze','prepare'} else 0
+        diagnostic_errors=sum(i.get('severity')=='error' for i in book.issues) if stage in {'analyze','prepare'} or block_paid else 0
         if stage in {'layout','all'}:
             if any('scan_evidence' in p for p in book.pages):
                 from .scan_layout import compose

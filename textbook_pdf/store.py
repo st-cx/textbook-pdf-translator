@@ -5,10 +5,13 @@ import json
 import sqlite3
 import threading
 import time
+import uuid
+from collections import OrderedDict
+from contextlib import contextmanager
 from dataclasses import asdict
 from pathlib import Path
 
-from .models import Book, Element, RULES_VERSION, digest, validate_translation, TOKEN_RE, protected_asset_descriptor
+from .models import Book, Element, RULES_VERSION, SCHEMA_VERSION, digest, validate_translation, TOKEN_RE, protected_asset_descriptor
 
 RULE_HASH_SCHEMA='protected-assets-v2'
 
@@ -100,7 +103,8 @@ class Store:
                 migrate_review_bindings(self.book,self)
             self.book, self.glossary = book, dict(glossary)
             self._elements = book.element_map()
-            for k,v in {'book':asdict(book),'glossary':self.glossary,'rules_version':RULES_VERSION,'rule_hash_schema':RULE_HASH_SCHEMA}.items():
+            for k,v in {'book':asdict(book),'glossary':self.glossary,'rules_version':RULES_VERSION,'rule_hash_schema':RULE_HASH_SCHEMA,
+                        'book_registration_revision':uuid.uuid4().hex}.items():
                 self.db.execute("INSERT OR REPLACE INTO metadata VALUES(?,?)",(k,json.dumps(v,ensure_ascii=False)))
             ids = []
             for e in book.elements:
@@ -202,12 +206,60 @@ class Store:
             self.record_issue(i)
         return {'accepted':not errors,'issues':issues}
 
+    @contextmanager
+    def _atomic_write(self):
+        """Own a transaction, or only a savepoint inside the caller's one."""
+        with self.lock:
+            nested=self.db.in_transaction
+            savepoint='store_'+uuid.uuid4().hex
+            self.db.execute('SAVEPOINT '+savepoint if nested else 'BEGIN IMMEDIATE')
+            try:
+                yield
+                if nested:self.db.execute('RELEASE '+savepoint)
+                else:self.db.commit()
+            except BaseException:
+                if nested:
+                    self.db.execute('ROLLBACK TO '+savepoint);self.db.execute('RELEASE '+savepoint)
+                else:self.db.rollback()
+                raise
+
     def put_candidate(self, element_id,text,provenance,issues=None):
         if not isinstance(text,str):
             raise ValueError("译文必须是字符串")
-        with self.lock,self.db:
+        with self._atomic_write():
             result=self._accept(element_id,text,provenance,issues)
             return result
+
+    def _validate_task_source(self,row,source_hash):
+        """Same frozen source/asset checks for submissions and candidate reviews."""
+        if row['source_hash'] != source_hash:
+            raise ValueError("任务原文或规则版本不匹配，拒绝旧结果")
+        payload=json.loads(row['payload'])
+        if 'glossary_hash' in payload and payload['glossary_hash'] != digest(self.glossary):
+            raise ValueError("任务术语表已过期，拒绝旧结果")
+        current_glossary=self.db.execute("SELECT value FROM metadata WHERE key='glossary'").fetchone()
+        if current_glossary and digest(json.loads(current_glossary[0]))!=digest(self.glossary):
+            raise ValueError('数据库术语版本已由其他执行者更新，拒绝旧会话结果')
+        expected=set(json.loads(row['element_ids']))
+        frozen=payload.get('elements',[])
+        if set(e.get('id') for e in frozen)!=expected or any(e.get('id') not in self._elements or e.get('source_hash')!=self._elements[e['id']].source_hash for e in frozen):
+            raise ValueError("任务对应的原文元素已改变，拒绝旧结果")
+        context=[entry for key in ('context_before','context_after') for entry in payload.get(key,[])]
+        if any(entry.get('id') not in self._elements or entry.get('source_hash')!=self._elements[entry['id']].source_hash for entry in context):
+            raise ValueError('任务只读上下文已改变，拒绝旧结果')
+        related=expected|{entry['id'] for entry in context}
+        for eid in related:
+            current=self.db.execute('SELECT source_hash,rule_hash FROM elements WHERE id=?',(eid,)).fetchone()
+            local=self._elements.get(eid)
+            if not current or local is None or current['source_hash']!=local.source_hash or current['rule_hash']!=self._rule_hash(local):
+                raise ValueError('数据库原文或公式版本已由其他执行者更新，拒绝旧会话结果')
+        descriptors=payload.get('protected_asset_descriptors')
+        if payload.get('protected_assets_schema')!=RULE_HASH_SCHEMA or not isinstance(descriptors,dict):
+            raise ValueError('任务缺少完整公式来源版本，请重新准备任务；拒绝旧租约结果')
+        required={aid for eid in related for aid in set(self._elements[eid].asset_ids)|set(TOKEN_RE.findall(self._elements[eid].text))}
+        if not required<=descriptors.keys() or any(aid not in self.book.assets or value!=protected_asset_descriptor(self.book.assets[aid]) for aid,value in descriptors.items()):
+            raise ValueError('任务公式或上下文保护对象已改变，拒绝旧结果')
+        return expected
 
     def submit(self, task_id,owner,source_hash,translations,provider='agent',usage=None):
         with self.lock,self.db:
@@ -215,33 +267,7 @@ class Store:
             # a separate API/agent connection may have replaced it meanwhile.
             if not self.db.in_transaction:self.db.execute('BEGIN IMMEDIATE')
             row = self._check_lease(task_id,owner)
-            if row['source_hash'] != source_hash:
-                raise ValueError("任务原文或规则版本不匹配，拒绝旧结果")
-            payload=json.loads(row['payload'])
-            if 'glossary_hash' in payload and payload['glossary_hash'] != digest(self.glossary):
-                raise ValueError("任务术语表已过期，拒绝旧结果")
-            current_glossary=self.db.execute("SELECT value FROM metadata WHERE key='glossary'").fetchone()
-            if current_glossary and digest(json.loads(current_glossary[0]))!=digest(self.glossary):
-                raise ValueError('数据库术语版本已由其他执行者更新，拒绝旧会话结果')
-            expected=set(json.loads(row['element_ids']))
-            frozen=payload.get('elements',[])
-            if set(e.get('id') for e in frozen)!=expected or any(e.get('id') not in self._elements or e.get('source_hash')!=self._elements[e['id']].source_hash for e in frozen):
-                raise ValueError("任务对应的原文元素已改变，拒绝旧结果")
-            context=[entry for key in ('context_before','context_after') for entry in payload.get(key,[])]
-            if any(entry.get('id') not in self._elements or entry.get('source_hash')!=self._elements[entry['id']].source_hash for entry in context):
-                raise ValueError('任务只读上下文已改变，拒绝旧结果')
-            related=expected|{entry['id'] for entry in context}
-            for eid in related:
-                current=self.db.execute('SELECT source_hash,rule_hash FROM elements WHERE id=?',(eid,)).fetchone()
-                local=self._elements.get(eid)
-                if not current or local is None or current['source_hash']!=local.source_hash or current['rule_hash']!=self._rule_hash(local):
-                    raise ValueError('数据库原文或公式版本已由其他执行者更新，拒绝旧会话结果')
-            descriptors=payload.get('protected_asset_descriptors')
-            if payload.get('protected_assets_schema')!=RULE_HASH_SCHEMA or not isinstance(descriptors,dict):
-                raise ValueError('任务缺少完整公式来源版本，请重新准备任务；拒绝旧租约结果')
-            required={aid for eid in related for aid in set(self._elements[eid].asset_ids)|set(TOKEN_RE.findall(self._elements[eid].text))}
-            if not required<=descriptors.keys() or any(aid not in self.book.assets or value!=protected_asset_descriptor(self.book.assets[aid]) for aid,value in descriptors.items()):
-                raise ValueError('任务公式或上下文保护对象已改变，拒绝旧结果')
+            expected=self._validate_task_source(row,source_hash)
             if not isinstance(translations,dict) or set(translations)-expected:
                 raise ValueError("提交包含任务外的元素编号")
             if not all(isinstance(v,str) for v in translations.values()):
@@ -302,6 +328,123 @@ class Store:
     def record_usage(self,task_id,provider,usage):
         with self.lock,self.db:
             self.db.execute("INSERT INTO usage(task_id,provider,json,created_at) VALUES(?,?,?,?)",(task_id,provider,json.dumps(usage,ensure_ascii=False),time.time()))
+
+    def _current_review_book(self,element):
+        """Read current protected objects from SQLite, never a stale Store Book.
+
+        A register transaction replaces its opaque revision every time. A small
+        cache of independently read objects is safe only under that revision;
+        old databases without one use actual JSON extraction on every commit.
+        SQLite returns only needed fields, avoiding a Python load of a full book.
+        Caller must already hold the review transaction and this Store's lock.
+        """
+        row=self.db.execute("SELECT value FROM metadata WHERE key='book_registration_revision'").fetchone()
+        revision=json.loads(row[0]) if row else None
+        if revision is None or getattr(self,'_review_cache_revision',None)!=revision:
+            self._review_asset_cache=OrderedDict()
+            self._review_cached_source=None
+            self._review_cache_revision=revision
+        ids=sorted(set(element.asset_ids)|set(TOKEN_RE.findall(element.text)))
+        cached=self._review_asset_cache
+        assets={aid:cached[aid] for aid in ids if aid in cached}
+        missing=[aid for aid in ids if aid not in assets]
+        chunks=[missing[n:n+32] for n in range(0,len(missing),32)]
+        if not chunks and self._review_cached_source is None:chunks=[[]]
+        from .models import Asset
+        for chunk in chunks:
+            paths=['$.source_sha256','$.schema_version']+['$.assets.'+json.dumps(aid) for aid in chunk]
+            query="SELECT json_extract(value,"+','.join('?' for _ in paths)+") FROM metadata WHERE key='book'"
+            current=self.db.execute(query,paths).fetchone()
+            if not current or current[0] is None:raise ValueError('Current source book is unavailable')
+            values=json.loads(current[0])
+            identity=(values[0],values[1])
+            if self._review_cached_source is not None and identity!=self._review_cached_source:
+                raise ValueError('Source identity changed within its registration revision')
+            self._review_cached_source=identity
+            for aid,value in zip(chunk,values[2:]):
+                if not isinstance(value,dict):raise ValueError('Current protected object is unavailable')
+                assets[aid]=Asset(**value)
+                cached[aid]=assets[aid];cached.move_to_end(aid)
+                while len(cached)>64:cached.popitem(last=False)
+        source,version=self._review_cached_source
+        if version!=SCHEMA_VERSION:raise ValueError('Current source schema is unsupported')
+        return Book('',source,'',0,[],elements=[element],assets=assets,schema_version=version)
+
+    def apply_semantic_review(self,element_id,translated,*,source_hash,rule_hash,
+                              source_sha256,review_hash,passed,problems,provider,
+                              task_id=None,owner=None,task_source_hash=None):
+        """Atomically compare the current source/asset/text and apply one verdict.
+
+        Accepted reviews require the still-accepted exact translation. Candidate
+        reviews additionally require the same valid API/agent task lease and all
+        its frozen context objects; they cannot touch a concurrently accepted
+        revision. Passing, failing and pending diagnostics share this transaction.
+        Stale work only returns a result: it never clears or revokes new state.
+        """
+        if (passed is not None and type(passed) is not bool) or not isinstance(translated,str):
+            raise ValueError('Invalid semantic review value')
+        if not isinstance(problems,list) or any(not isinstance(p,str) for p in problems):
+            raise ValueError('Invalid semantic review problems')
+        if passed is True and problems:raise ValueError('A passed review cannot contain problems')
+        from .translation import _review_hash,REVIEW_HASH_SCHEMA
+        candidate=task_id is not None
+        def apply():
+            stale=lambda reason:{'applied':False,'stale':True,'reason':reason}
+            element_row=self.db.execute('SELECT * FROM elements WHERE id=?',(element_id,)).fetchone()
+            if (not element_row or element_row['source_hash']!=source_hash
+                or element_row['rule_hash']!=rule_hash):return stale('source_or_asset_revision_changed')
+            element=Element(**json.loads(element_row['json']))
+            if element.source_hash!=source_hash:return stale('source_record_inconsistent')
+            row=self.db.execute('SELECT * FROM translations WHERE element_id=?',(element_id,)).fetchone()
+            if candidate:
+                try:
+                    task=self._check_lease(task_id,owner)
+                    expected=self._validate_task_source(task,task_source_hash)
+                except ValueError:return stale('task_lease_or_frozen_source_changed')
+                if element_id not in expected:return stale('element_outside_task')
+                if (row and row['status']=='accepted' and row['source_hash']==source_hash
+                    and row['rule_hash']==rule_hash):return stale('candidate_already_replaced_by_accepted_revision')
+            elif (not row or row['status']!='accepted' or row['source_hash']!=source_hash
+                  or row['rule_hash']!=rule_hash or digest(row['text'])!=digest(translated)):
+                return stale('translation_revision_changed')
+            glossary_row=self.db.execute("SELECT value FROM metadata WHERE key='glossary'").fetchone()
+            if not glossary_row:return stale('current_glossary_unavailable')
+            glossary=json.loads(glossary_row[0])
+            try:
+                current=self._current_review_book(element)
+                if current.source_sha256!=source_sha256:return stale('book_source_identity_changed')
+                if (translation_rule_hash(current,element,glossary)!=rule_hash
+                    or _review_hash(element,translated,current,glossary)!=review_hash):
+                    return stale('current_review_binding_changed')
+            except (ValueError,KeyError,TypeError):return stale('current_review_binding_unavailable')
+            entry={'element_id':element_id,'page':element.page,'review_provider':provider,
+                   'source_hash':source_hash,'translation_hash':digest(translated),
+                   'review_hash':review_hash,'review_hash_schema':REVIEW_HASH_SCHEMA}
+            if task_id is not None:entry['task_id']=task_id
+            if passed is True:
+                codes={'semantic_review_pending','semantic_review_failed','glossary_review','glossary_review_required'}
+                for old in self.db.execute("SELECT id,json FROM issues WHERE resolved=0 AND json_extract(json,'$.element_id')=?",(element_id,)).fetchall():
+                    if json.loads(old['json']).get('code') in codes:
+                        self.db.execute("UPDATE issues SET resolved=1,resolution_reason='current_review_passed' WHERE id=?",(old['id'],))
+                entry.update(code='semantic_review_passed',severity='info',
+                             detail='独立语义复核已通过；结论绑定当前原文、公式、译文和冻结规则')
+            elif passed is False:
+                entry.update(code='semantic_review_failed',severity='error',
+                             detail='；'.join(problems) or '独立审校未通过')
+                issues=[entry]+validate_translation(element,translated,current)
+                self.db.execute('INSERT INTO candidates(element_id,text,provenance,issues,created_at,source_hash,rule_hash) VALUES(?,?,?,?,?,?,?)',
+                    (element_id,translated,'semantic-review',json.dumps(issues,ensure_ascii=False),time.time(),source_hash,rule_hash))
+                if not candidate:
+                    self.db.execute("UPDATE translations SET status='review_failed' WHERE element_id=? AND source_hash=? AND rule_hash=? AND text=?",
+                                    (element_id,source_hash,rule_hash,translated))
+                    self.db.execute("UPDATE tasks SET state='pending',owner=NULL,lease_until=0 WHERE state!='superseded' AND EXISTS (SELECT 1 FROM json_each(tasks.element_ids) WHERE value=?)",(element_id,))
+            else:
+                entry.update(code='semantic_review_pending',severity='warning',
+                             detail='；'.join(problems) or '独立语义复核尚未成功完成')
+            self.record_issue(entry)
+            return {'applied':True,'stale':False,'code':entry['code']}
+        with self._atomic_write():
+            return apply()
 
     def reject_translation(self,element_id,translation_hash):
         with self.lock,self.db:

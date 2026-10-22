@@ -19,7 +19,8 @@ import unicodedata
 
 import pymupdf as fitz
 
-from .models import Asset, Book, Element, digest, file_sha256, RULES_VERSION
+from .models import Asset, Book, Element, digest, file_sha256, RULES_VERSION, TOKEN_RE
+from .drawing_geometry import source_drawings
 
 MATH_FONT = re.compile(r"math|symbol|cmmi|cmsy|cmex|msam|msbm|mt.?extra|euclid", re.I)
 CODE_FONT = re.compile(r"courier|mono|consol|lettergot|typewriter|cmt[tv]", re.I)
@@ -122,6 +123,8 @@ def _collect(page):
                               "text": "".join(c["c"] for c in chars),
                               "block": block_index, "line": line_index,
                               "dir": list(line.get("dir", (1, 0)))})
+    from .glyph_geometry import correct_native_math_boxes
+    correct_native_math_boxes(page, glyphs)
     runs=[]
     for line in lines:
         if line.get("dir")!=[1,0]:runs.append(line);continue
@@ -249,30 +252,8 @@ def _coalesce_fragments(lines):
 
 
 def _printed_page(page, lines):
-    candidates = []
-    for line in lines:
-        r = fitz.Rect(line["bbox"])
-        if r.y1 > page.rect.height * .095 and r.y0 < page.rect.height * .91:
-            continue
-        t = line["text"].strip()
-        # Separate lines are frequent even where the header visually appears
-        # one line. Avoid chapter/section numbers inside a running header.
-        if re.fullmatch(r"\d{1,4}|[ivxlcdmIVXLCDM]{1,10}", t):
-            if t.isdigit() or len(t) > 1 or t.lower() in {"i", "v", "x"}:
-                candidates.append((t, r))
-    if len(candidates) == 1:
-        return candidates[0][0], "margin-glyph", .98
-    if len(candidates) > 1:
-        edge = [c for c in candidates if c[1].x0 < page.rect.width * .2 or c[1].x1 > page.rect.width * .8]
-        if len(edge) == 1:
-            return edge[0][0], "margin-glyph", .9
-        return None, "ambiguous", 0
-    label = page.get_label()
-    # A PDF with no explicit PageLabels returns an empty string; physical page
-    # indices are never silently treated as printed pagination.
-    if label:
-        return label, "pdf-page-label", .8
-    return None, "absent", 0
+    from .source_pages import recognize_printed_page
+    return recognize_printed_page(page,lines)
 
 
 def _columns(lines, width):
@@ -395,21 +376,86 @@ def _math_spans(line, hints=()):
             j += 1
         text = "".join(g["c"] for g in chars[i:j]).strip()
         function_run=bool(re.fullmatch(r"[A-Za-zΑ-ω_]{1,40}",text) and j<len(chars) and chars[j]["c"]=="(" and not chars[j-1]["c"].isspace())
-        if chars[i]["flags"] & 2 and (re.fullmatch(r"[A-Za-zΑ-ω]{1,2}", text) or function_run):
+        scripted_run=bool(re.fullmatch(r"[A-Za-zΑ-ω_]{2,40}",text)
+            and (min(g['size'] for g in chars[i:j])<max(g['size'] for g in chars[i:j])*.85
+                 or max(g['origin'][1] for g in chars[i:j])-min(g['origin'][1] for g in chars[i:j])>2))
+        if chars[i]["flags"] & 2 and (re.fullmatch(r"[A-Za-zΑ-ω]{1,2}", text) or function_run or scripted_run):
             for k in range(i, j):
                 mask[k] = bool(chars[k]["c"].strip())
         i = j
     prose_indices=set()
     for word in re.finditer(r"[A-Za-z]+",line["text"]):
         a,b=word.span()
+        scripted_word = (b-a <= 4 and all(chars[k]['flags']&2 for k in range(a,b))
+                         and (min(chars[k]['size'] for k in range(a,b)) < max(chars[k]['size'] for k in range(a,b))*.85
+                              or max(chars[k]['origin'][1] for k in range(a,b))-min(chars[k]['origin'][1] for k in range(a,b)) > 2))
+        prose_connector = (word[0].lower() in {'and','or','if','then','for','because','when','where','otherwise'}
+                           and all(re.search(r'mathjax_main', chars[k]['font'], re.I) for k in range(a,b))
+                           and not scripted_word)
+        if prose_connector:
+            for k in range(a,b):
+                mask[k] = False
+            prose_indices.update(range(a,b))
+            continue
+        if scripted_word:
+            for k in range(a,b):
+                mask[k] = True
         # Bounding boxes are only hints. Every ordinary Latin word is vetoed
         # as a whole; an italic variable or actual math-font run is separate
         # positive evidence. This also forbids cutting italic emphasis words.
-        trusted=all(_is_math(chars[i]) for i in range(a,b)) or (b-a<=2 and all(chars[i]["flags"]&2 for i in range(a,b)))
+        trusted=all(_is_math(chars[i]) for i in range(a,b)) or (b-a<=2 and all(chars[i]["flags"]&2 for i in range(a,b))) or scripted_word
         if not trusted:prose_indices.update(range(a,b))
     for word in re.finditer(r"[A-Za-z]+",line["text"]):
-        if word[0] in {"sin","cos","tan","cot","sec","csc","log","ln","lim","gcd","lcm","max","min","det","mod","exp","Pr","Prob"} and all(MATH_FONT.search(chars[k]["font"]) for k in range(word.start(),word.end())):
-            for k in range(word.start(),word.end()):mask[k]=True
+        if word[0] not in {"sin","cos","tan","cot","sec","csc","log","ln","lim","gcd","lcm","max","min","det","mod","exp","Pr","Prob"}:
+            continue
+        right=word.end()
+        while right<len(chars) and chars[right]["c"].isspace():right+=1
+        native_operand=right<len(chars) and mask[right]
+        if right<len(chars) and chars[right]["c"]=="(":
+            depth=0
+            for end in range(right,min(len(chars),right+160)):
+                depth+=(chars[end]["c"]=="(")-(chars[end]["c"]==")")
+                if depth==0:
+                    argument=chars[right+1:end]
+                    native_operand=bool(argument) and (any(mask[k] for k in range(right+1,end))
+                        or all(g["c"].isdigit() or g["c"] in ' ,.+-/' for g in argument))
+                    break
+        trusted_font=all(MATH_FONT.search(chars[k]["font"]) for k in range(word.start(),word.end()))
+        if trusted_font or native_operand:
+            for k in range(word.start(),word.end()):mask[k]=True;prose_indices.discard(k)
+    # Upright alphanumeric constants are actual operands in x = CS1. Do not
+    # terminate protection at '=' or promote arbitrary surrounding English.
+    for identifier in re.finditer(r"(?<![A-Za-z0-9_])[A-Z][A-Z0-9_]*\d[A-Z0-9_]*(?![A-Za-z0-9_])",line["text"]):
+        left=identifier.start()-1
+        while left>=0 and chars[left]["c"].isspace():left-=1
+        if left>=0 and mask[left] and chars[left]["c"] in '=<>≤≥≠':
+            for k in range(identifier.start(),identifier.end()):mask[k]=True;prose_indices.discard(k)
+    # A PDF line wrap can leave a complete upright truth constant without its
+    # preceding arrow on this line. The original letter is still immutable.
+    # Typed null/nil constants require an adjacent relation and italic/code
+    # glyph evidence; an ordinary English use of "null" is never promoted.
+    for word in re.finditer(r"\b(?:T|F|null|nil|NULL|NIL|true|false)\b", line["text"]):
+        a,b=word.span()
+        truth=word[0] in {'T','F'}
+        left=a-1
+        while left>=0 and chars[left]['c'].isspace():left-=1
+        typed=all(g['flags']&2 or CODE_FONT.search(g['font']) for g in chars[a:b])
+        relation=left>=0 and mask[left] and chars[left]['c'] in '=≠→↔'
+        if truth or typed and relation:
+            for k in range(a,b):mask[k]=True;prose_indices.discard(k)
+    # Native interval endpoints can use the ordinary upright font. A complete
+    # same-baseline pair (including mixed open/closed endpoints) establishes
+    # the unit; character-count balancing alone cannot recognize [i, infinity).
+    endpoint=r'[+−-]?(?:∞|\d+(?:\.\d+)?|[A-Za-zΑ-ω](?:\d+)?)'
+    for interval in re.finditer(r'[\[(]\s*'+endpoint+r'\s*,\s*'+endpoint+r'\s*[\])]',line['text']):
+        a,b=interval.span();native=chars[a:b]
+        baseline=statistics.median(g['origin'][1] for g in native)
+        size=statistics.median(g['size'] for g in native)
+        if a<prefix_end or any(abs(g['origin'][1]-baseline)>size*.2 for g in native):continue
+        if any(((chars[k]['origin'][0]-chars[k-1]['origin'][0])**2
+                +(chars[k]['origin'][1]-chars[k-1]['origin'][1])**2)**.5
+               >max(chars[k]['size'],chars[k-1]['size'])*1.2 for k in range(a+1,b)):continue
+        for k in range(a,b):mask[k]=True;prose_indices.discard(k)
     native_mask=list(mask)
     for h in hints:
         r = fitz.Rect(h["bbox"])
@@ -447,6 +493,19 @@ def _math_spans(line, hints=()):
     # enrolled(kevin,math273)). Protect the complete balanced call whenever the
     # preceding identifier is mathematical, rather than stopping at P(.
     forbidden=set()
+    # Some upright MathJax diagram labels use a math font even for an English
+    # apostrophe. Keep it with its native word only when *all* surrounding
+    # letters already have ordinary-prose evidence. Primes on variables and
+    # widely separated source glyphs do not meet this word-level proof.
+    for word in re.finditer(r"[A-Za-z]+(?:['’][A-Za-z]+)+",line['text']):
+        positions=[k for k in range(*word.span()) if chars[k]['c'].isalpha()]
+        if len(positions)<3 or any(k not in prose_indices or mask[k] for k in positions):continue
+        contiguous=all(((chars[k]['origin'][0]-chars[k-1]['origin'][0])**2
+                        +(chars[k]['origin'][1]-chars[k-1]['origin'][1])**2)**.5
+                       <=max(chars[k]['size'],chars[k-1]['size'])*1.2
+                       for k in range(word.start()+1,word.end()))
+        if contiguous:
+            forbidden.update(k for k in range(*word.span()) if chars[k]['c'] in "'’")
     # Compact answer pages place several upright bold option markers on one
     # physical line. Their closing parentheses are prose list punctuation,
     # even when immediately followed by a mathematical expression. Italic
@@ -458,7 +517,16 @@ def _math_spans(line, hints=()):
     for i,g in enumerate(chars):
         if g["c"] in "([{" and i and chars[i-1]["c"].isspace():
             tail="".join(c["c"] for c in chars[i+1:]).lstrip()
-            if re.match(r"[A-Za-z]{3,}\b",tail) and not re.match(r"[ivxlcdm]+\)",tail):forbidden.add(i)
+            word=re.match(r"[A-Za-z]{3,}\b",tail)
+            if word is None:
+                # Short English clause openings need a following native word.
+                # A lone upright i/B inside an interval or matrix expression
+                # is not prose, even if its font supplies no math seed.
+                word=re.match(r"(?:a|an|it|is|by|as|we|he|to|of|so|do|in|on|if)\b(?=\s+[A-Za-z]{2,}\b)",tail,re.I)
+            start=i+1
+            while start<len(chars) and chars[start]['c'].isspace():start+=1
+            native_word=word and all(mask[k] for k in range(start,min(len(chars),start+len(word[0]))))
+            if word and not native_word and not re.match(r"[ivxlcdm]+\)",tail):forbidden.add(i)
         if g["c"] not in "([{":
             continue
         previous=i-1
@@ -568,9 +636,19 @@ def _math_spans(line, hints=()):
 
 def _asset(book, doc, page, outdir, kind, bbox, text="", baseline=None, metadata=None):
     bbox = fitz.Rect(bbox) & page.rect
+    selected_source=set((metadata or {}).get('glyph_ids',[]))
+    if selected_source:
+        # The final visible box, as well as the internal cleanup region, must
+        # contain each selected native glyph's measured ink. Keeping a text
+        # operator alone does not prevent a tall bracket being visually cut.
+        ink=[g['bbox'] for g in getattr(book,'_active_glyphs',[]) if g['id'] in selected_source]
+        if ink:bbox=(bbox|_rect_union(ink))&page.rect
     if bbox.is_empty or bbox.width <= .05 or bbox.height <= .05:
         raise ValueError(f"Empty {kind} crop on page {page.number+1}: {bbox}")
-    aid = f"p{page.number+1:04d}-{kind}-{digest([book.source_sha256,_rounded(bbox),text])[:14]}"
+    identity=[book.source_sha256,_rounded(bbox),text]
+    if metadata and metadata.get('exclude_glyph_ids'):
+        identity.append({'excluded_glyph_ids':sorted(metadata['exclude_glyph_ids'])})
+    aid = f"p{page.number+1:04d}-{kind}-{digest(identity)[:14]}"
     if aid in book.assets:
         return book.assets[aid]
     # One PDF bundle per source page shares the original font/form resources
@@ -599,9 +677,23 @@ def _asset(book, doc, page, outdir, kind, bbox, text="", baseline=None, metadata
         ip.apply_redactions(images=0,graphics=0,text=0)
     if selected_ids:
         glyphs=getattr(book,"_active_glyphs",[])
-        selected_rects=[fitz.Rect(g["bbox"]) for g in glyphs if g["id"] in selected_ids]
+        # MuPDF redaction uses nominal text boxes. Protect both the true ink
+        # and that nominal box, so removing neighbouring prose cannot delete
+        # a tall glyph whose visible ink lies below its nominal ascender box.
+        selected_rects=[fitz.Rect(g['bbox']) | fitz.Rect(g.get('nominal_bbox',g['bbox']))
+                        for g in glyphs if g['id'] in selected_ids]
+        # Rotated/anisotropic text has different rawdict and redaction metrics.
+        # Protect the native trace envelopes as well, without substituting a
+        # Unicode glyph or changing the original text transform.
+        selected_keys={(g['c'],g['font'].split('+')[-1][:31],round(g['origin'][0],3),round(g['origin'][1],3))
+                       for g in glyphs if g['id'] in selected_ids and g['c'].strip()}
+        trace_rects=[fitz.Rect(rect) for span in page.get_texttrace() for code,_,origin,rect in span['chars']
+                     if (chr(code),span['font'].split('+')[-1][:31],round(origin[0],3),round(origin[1],3)) in selected_keys]
+        selected_rects.extend(trace_rects)
+        cleanup_bbox=(bbox|_rect_union(selected_rects))+(-.2,-.2,.2,.2)
+        cleanup_bbox &= page.rect
         foreign=[g for g in glyphs if g["id"] not in selected_ids and g["c"].strip()
-                 and bbox.intersects(g["bbox"])]
+                 and cleanup_bbox.intersects(g["bbox"])]
         if foreign:
             for glyph in foreign:
                 gr=fitz.Rect(glyph["bbox"])
@@ -610,7 +702,7 @@ def _asset(book, doc, page, outdir, kind, bbox, text="", baseline=None, metadata
                 # MuPDF intentionally ignores very small overlap slivers.
                 free=[gr]
                 for sr in selected_rects:
-                    cut=sr+(-.04,-.04,.04,.04)
+                    cut=sr+(-.1,-.1,.1,.1)
                     pieces=[]
                     for region in free:
                         hit=region&cut
@@ -632,7 +724,43 @@ def _asset(book, doc, page, outdir, kind, bbox, text="", baseline=None, metadata
     # A cropbox alone hides, but does not remove, the entire source page's text
     # inside its Form XObject. Permanently discard outside content in a private
     # page copy, so copy/search and downstream PDF import cannot expose it.
-    ip.clip_to_rect(bbox)
+    from .native_clipping import clip_native_content,verify_selected_native_glyphs
+    cleanup=cleanup_bbox if selected_ids else bbox
+    zero_advance=False
+    for g in getattr(book,'_active_glyphs',[]):
+        nominal=fitz.Rect(g.get('nominal_bbox',g['bbox']))
+        if not g['c'].strip() or not(abs(nominal.width)<1e-8 or abs(nominal.height)<1e-8):continue
+        # Closed interval contact on the zero dimension, positive overlap on
+        # the other dimension; text can be rotated by 90 or 270 degrees.
+        horizontal=(cleanup.x0<=nominal.x0<=cleanup.x1 if abs(nominal.width)<1e-8
+                    else min(nominal.x1,cleanup.x1)>max(nominal.x0,cleanup.x0))
+        vertical=(cleanup.y0<=nominal.y0<=cleanup.y1 if abs(nominal.height)<1e-8
+                  else min(nominal.y1,cleanup.y1)>max(nominal.y0,cleanup.y0))
+        if horizontal and vertical:zero_advance=True;break
+    clipping_proof=clip_native_content(ip,cleanup,preserve_zero_advance=zero_advance)
+    selected_native_proof=(verify_selected_native_glyphs(page,ip,
+        [g for g in glyphs if g['id'] in selected_ids]) if selected_ids else {})
+    selected_glyphs_lost=selected_native_proof.get('missing_ids',[])
+    if selected_ids and (isolation_issues or selected_glyphs_lost):
+        # Redaction can conflate overlapping nominal font boxes. Restart from
+        # the original private copy and retain the uniquely identified original
+        # operators instead; never try to repair an already deleted character.
+        exact=fitz.open();exact.insert_pdf(doc,from_page=page.number,to_page=page.number)
+        ep=exact[0]
+        proof=clip_native_content(ep,cleanup,selected_glyphs=[g for g in glyphs if g['id'] in selected_ids],source_glyphs=glyphs)
+        exact_identity=verify_selected_native_glyphs(page,ep,[g for g in glyphs if g['id'] in selected_ids])
+        lost=exact_identity['missing_ids']
+        if proof.get('native_text_selection',{}).get('verified') and not lost:
+            isolated.close();isolated=exact;ip=ep
+            clipping_proof=proof;selected_glyphs_lost=[];isolation_issues=[]
+            selected_native_proof=exact_identity
+        else:exact.close()
+    if selected_ids:
+        if selected_glyphs_lost:
+            _issue(book,'formula_crop_selected_glyph_lost',
+                   f'{len(selected_glyphs_lost)} protected native glyphs are missing from isolated asset {aid}',
+                   page.number+1,severity='error')
+            book.issues[-1]['asset_id']=aid
     target.show_pdf_page(target.rect,isolated,0,clip=bbox)
     isolated.close()
     if isolation_issues:
@@ -640,9 +768,14 @@ def _asset(book, doc, page, outdir, kind, bbox, text="", baseline=None, metadata
     metric = float(baseline-bbox.y0) if baseline is not None else bbox.height*.8
     asset = Asset(aid,kind,relative,page.number+1,_rounded(bbox),bbox.width,bbox.height,
                   metric,text,"",
-                  {"format":"pdf","vector":True,"baseline_from_top":metric,
+                  {**(metadata or {}),"format":"pdf","vector":True,"baseline_from_top":metric,
                    "source_sha256":book.source_sha256,"pdf_page":pdf_page,
-                   "isolated_source_content":True,"isolation_issues":isolation_issues,**(metadata or {})})
+                   "isolated_source_content":True,"isolation_issues":isolation_issues,
+                   "selected_native_glyphs_verified":bool(selected_ids) and not selected_glyphs_lost,
+                   "selected_glyphs_lost":selected_glyphs_lost,
+                   "selected_native_identity":selected_native_proof,
+                   "native_content_clipping":clipping_proof,
+                   "native_cleanup_bbox":_rounded(cleanup_bbox if selected_ids else bbox)})
     book.assets[aid] = asset
     return asset
 
@@ -944,6 +1077,15 @@ def _merge_body_continuations(book,elements,glyphs,page_width):
     elements[:]=result
 
 
+def _promote_formula_prose(elements):
+    """A math-heavy PDF line can still contain words that require translation."""
+    for element in elements:
+        prose = TOKEN_RE.sub('', element.text)
+        if element.kind == 'formula' and re.search(r'[A-Za-z]{3,}', prose):
+            element.kind = 'paragraph'
+            element.metadata['source_role_repair'] = 'natural-language words remain outside protected formulas'
+
+
 def _assemble_display_math(book,doc,page,outdir,elements,glyphs):
     """Keep a proven native fraction display as one unchanged source crop.
 
@@ -952,12 +1094,24 @@ def _assemble_display_math(book,doc,page,outdir,elements,glyphs):
     are blocking ambiguities rather than a guessed mathematical reconstruction.
     """
     bars=[]
-    for drawing in page.get_drawings():
+    for drawing in source_drawings(page):
+        if drawing.get('fully_source_clipped'):
+            continue
         r=fitz.Rect(drawing["rect"])
         if r.width>2 and r.height<1 and all(item[0]=="l" for item in drawing["items"]):bars.append(r)
     handled=set()
     for bar_index,bar in enumerate(bars):
         if bar_index in handled:continue
+        # Connected native regions have already proven and preserved these
+        # bars, their scripts and their text owners. Do not reinterpret the
+        # old PDF element boxes as another independent fraction display.
+        active_assets={aid for e in elements if not e.metadata.get('render_suppressed') for aid in e.asset_ids}
+        if any(aid in active_assets and asset.metadata.get('detector')=='native-math-connected-region-v1'
+               and not asset.metadata.get('isolation_issues')
+               and any(max(abs(x-y) for x,y in zip(box,_rounded(bar))) < .02
+                       for box in asset.metadata.get('fraction_bar_bboxes',[]))
+               for aid,asset in book.assets.items() if asset.page==page.number+1):
+            continue
         formulae=[e for e in elements if e.kind=="formula" and not e.metadata.get("render_suppressed") and e.text.strip() not in {"◂","▸","■","□","◻","◼"}]
         owners={e.id:e for e in formulae}
         near=[g for g in glyphs if g.get("owner") in owners and g["c"].strip()
@@ -1024,8 +1178,114 @@ def _assemble_display_math(book,doc,page,outdir,elements,glyphs):
             if issue.get("element_id") in group_ids:issue["element_id"]=keeper.id
 
 
+def _boundary_native_evidence(book,element,asset):
+    """Return actual selected source glyphs, never a text-only exemption."""
+    ids=set(asset.metadata.get('glyph_ids',[]))
+    if not ids or asset.metadata.get('selected_glyphs_lost') or asset.metadata.get('isolation_issues'):
+        return None
+    active=getattr(book,'_active_glyphs',[])
+    active_map={g['id']:g for g in active}
+    owners={element.id,*element.metadata.get('merged_source_ids',[])}
+    if ids<=active_map.keys() and all(active_map[i].get('owner') in owners for i in ids):
+        glyphs=active
+    else:
+        path=Path(book.source_path)
+        if not path.is_file():return None
+        key=(str(path.resolve()),book.source_sha256,asset.page)
+        cached=getattr(book,'_boundary_native_page',None)
+        if cached is None or cached[0]!=key:
+            try:
+                with fitz.open(path) as doc:
+                    if not 1<=asset.page<=len(doc):return None
+                    _,glyphs=_collect(doc[asset.page-1])
+            except (OSError,ValueError,RuntimeError):return None
+            book._boundary_native_page=(key,glyphs)
+        else:glyphs=cached[1]
+    selected=[g for g in glyphs if g['id'] in ids]
+    if len(selected)!=len(ids):return None
+    box=fitz.Rect(asset.bbox)+(-.5,-.5,.5,.5)
+    if any(not box.contains((fitz.Rect(g['bbox']).tl+fitz.Rect(g['bbox']).br)*.5) for g in selected):
+        return None
+    if re.sub(r'\s+','',asset.text)!=re.sub(r'\s+','', ''.join(g['c'] for g in selected)):
+        return None
+    return selected,glyphs
+
+
+def _native_prose_rhs(book,element,asset):
+    """Prove a source definition such as N = number of solutions.
+
+    The right side must exist both in the current translatable element and in
+    immediately adjacent, same-baseline ordinary source glyphs. Missing math,
+    unrelated prose, another column and an unknown source remain blocking.
+    """
+    if not re.search(r'=\s*$',asset.text):return None
+    matches=[m for m in TOKEN_RE.finditer(element.text) if m[1]==asset.id]
+    if len(matches)!=1:return None
+    literal=element.text[matches[0].end():].split('⟦',1)[0]
+    words=re.findall(r'[A-Za-z]+',literal)
+    noun=r'(?:(?:the|a|an)\s+)?(?:(?:total\s+)?(?:number|count|length|size|root|sum|product|value|location|label)\s+of|(?:first|last|next|other|left|right|smallest|largest|least|greatest)\s+(?:vertex|edge|endpoint|child|element|value))\b'
+    if len(words)<2 or not re.match(r'\s*\(?\s*'+noun,literal,re.I):return None
+    evidence=_boundary_native_evidence(book,element,asset)
+    if evidence is None:return None
+    selected,glyphs=evidence
+    operators=[g for g in selected if g['c']=='=']
+    if not operators:return None
+    operator=max(operators,key=lambda g:g['bbox'][0])
+    baseline=operator['origin'][1];size=operator['size']
+    right=sorted((g for g in glyphs if g['c'].strip()
+                  and g['bbox'][0]>=operator['bbox'][2]-.1
+                  and abs(g['origin'][1]-baseline)<=max(.5,size*.12)),key=lambda g:g['bbox'][0])
+    if not right or right[0]['bbox'][0]-operator['bbox'][2]>size*1.5:return None
+    # Reconstruct spaces from native x positions, not PDF character order.
+    chars=[];previous=operator
+    for g in right:
+        gap=g['bbox'][0]-previous['bbox'][2]
+        if gap>size*1.5:break
+        if gap>size*.12:chars.append(' ')
+        chars.append(g['c']);previous=g
+    native=''.join(chars).lstrip(' (')
+    native_noun=re.match(noun,native,re.I)
+    if not native_noun:return None
+    if native_noun[0].lower().endswith('of') and not native[native_noun.end():].strip(' )'):
+        return None
+    expected=' '.join(words[:4])
+    native_words=re.findall(r'[A-Za-z]+',native)
+    if [w.lower() for w in native_words[:len(words[:4])]]!=[w.lower() for w in words[:4]]:return None
+    letters=[g for g in right if g['c'].isalpha()][:len(words[0])]
+    if not letters or all(_is_math(g) or g['flags']&2 for g in letters):return None
+    return {'kind':'native-translatable-prose-rhs','rhs_prefix':' '.join(words[:2]),
+            'source_prefix':expected,'source_baseline':baseline,
+            'native_glyph_ids':[g['id'] for g in selected],
+            'rhs_source_bbox':_rounded(_rect_union(g['bbox'] for g in right[:max(2,len(expected))]))}
+
+
+def _native_complete_interval(book,element,asset):
+    endpoint=r'[+−-]?(?:∞|\d+(?:\.\d+)?|[A-Za-zΑ-ω](?:\d+)?)'
+    lhs=r'(?:[A-Za-zΑ-ω][A-Za-zΑ-ω0-9_]*\s*=\s*)?'
+    if not re.fullmatch(lhs+r'[\[(]\s*'+endpoint+r'\s*,\s*'+endpoint+r'\s*[\])]',asset.text.strip()):return None
+    evidence=_boundary_native_evidence(book,element,asset)
+    if evidence is None:return None
+    selected,glyphs=evidence
+    visible=[g for g in selected if g['c'].strip()]
+    if not visible:return None
+    opening=next((i for i,g in enumerate(visible) if g['c'] in '(['),None)
+    if opening is None:return None
+    interval_glyphs=visible[opening:]
+    baseline=statistics.median(g['origin'][1] for g in interval_glyphs)
+    size=statistics.median(g['size'] for g in interval_glyphs)
+    if any(abs(g['origin'][1]-baseline)>size*.2 for g in interval_glyphs):return None
+    box=fitz.Rect(asset.bbox)
+    if any(g['c'].strip() and g['id'] not in {v['id'] for v in selected}
+           and box.contains((fitz.Rect(g['bbox']).tl+fitz.Rect(g['bbox']).br)*.5) for g in glyphs):return None
+    return {'kind':'complete-native-interval','source_text':asset.text,
+            'native_glyph_ids':[g['id'] for g in visible], 'bbox':asset.bbox}
+
+
 def _check_atomic_formulas(book,elements):
     element_ids={e.id for e in elements}
+    from .native_operators import ISSUE_CODE,check_vertical_operator_limits
+    book.issues=[i for i in book.issues if not(i.get('code')==ISSUE_CODE and i.get('element_id') in element_ids)]
+    book.issues.extend(check_vertical_operator_limits(book,elements))
     book.issues=[i for i in book.issues if not(i["code"]=="formula_atomic_boundary_review" and i.get("element_id") in element_ids)]
     recorded={(i.get("element_id"),i.get("detail")) for i in book.issues if i["code"]=="formula_atomic_boundary_review"}
     for element in elements:
@@ -1033,6 +1293,15 @@ def _check_atomic_formulas(book,elements):
             asset=book.assets[aid]
             if asset.kind!="formula":continue
             text=asset.text.strip()
+            interval=_native_complete_interval(book,element,asset)
+            if interval:
+                resolved=[q for q in book.issues if q['code']=='formula_boundary_review'
+                          and q.get('element_id')==element.id and q.get('detail','').endswith(': '+text)]
+                for q in resolved:
+                    book.profile.setdefault('resolved_source_issues',[]).append({**q,
+                        'resolution_reason':'complete native interval has intentional mixed endpoint delimiters',
+                        'source_proof':interval,'asset_id':asset.id})
+                book.issues=[q for q in book.issues if q not in resolved]
             depth=0;mixed_reference=False
             for i,c in enumerate(text):
                 if c in "([{":depth+=1
@@ -1042,6 +1311,15 @@ def _check_atomic_formulas(book,elements):
                 _issue(book,"source_formula_step_reference_mixed","Protected source span mixes a prior step reference with the next numbered proof step",element.page,element.id,severity="error")
             if ("√" in text and text.endswith("√")) or (re.search(r"[A-Za-z0-9]",text) and re.search(r"[=±+−×÷∧∨→↔]\s*$",text)):
                 detail="Protected formula ends before a required operand/radicand: "+text
+                rhs=_native_prose_rhs(book,element,asset)
+                if rhs:
+                    record={'code':'formula_atomic_boundary_review','severity':'error','page':element.page,
+                            'element_id':element.id,'detail':detail,'asset_id':asset.id,
+                            'resolution_reason':'right-hand operand is explicit same-baseline translatable source prose',
+                            'source_proof':rhs}
+                    saved=book.profile.setdefault('resolved_source_issues',[])
+                    if record not in saved:saved.append(record)
+                    continue
                 if (element.id,detail) not in recorded:
                     _issue(book,"formula_atomic_boundary_review",detail,element.page,element.id,severity="error")
                     recorded.add((element.id,detail))
@@ -1099,6 +1377,7 @@ def _assemble_inline_units(elements,glyphs):
         keeper.text=" ".join(e.text for e in members)
         keeper.metadata["source_text"]=" ".join(e.metadata.get("source_text",e.text) for e in members)
         keeper.bbox=_rounded(_rect_union(e.bbox for e in members))
+        keeper.asset_ids=list(dict.fromkeys(a for e in members for a in e.asset_ids))
         keeper.metadata["glyph_ids"]=[g for e in members for g in e.metadata.get("glyph_ids",[])]
         for child in members[1:]:
             child.metadata.update(render_suppressed=True,translatable=False,preserve_only=True,superseded_by=keeper.id,
@@ -1307,7 +1586,8 @@ def _repair_hyphenated_flow(book,elements,glyphs):
                 if overlap<=0:continue
                 hanging=first.bbox[0]-24<=x<=first.bbox[0]+size*3.5
                 portrait=(abs(first.bbox[2]-other.bbox[2])<4 and other.bbox[0]<first.bbox[0]
-                          and (first.kind==other.kind=="footnote" or first.metadata.get("source_block")==other.metadata.get("source_block")))
+                          and (first.kind==other.kind=="footnote" or first.metadata.get("source_block")==other.metadata.get("source_block")
+                               or first.metadata.get('biography_group') and first.metadata.get('biography_group')==other.metadata.get('biography_group')))
                 if not(hanging or portrait):continue
                 if first.style.get("column")!=other.style.get("column") and not portrait:continue
                 candidates.append((advance,abs(x-first.bbox[0]),other))
@@ -1502,8 +1782,10 @@ def _repair_page_structure(book,doc,page,outdir,elements,lines,glyphs):
     number=page.number+1
     # An image and its duplicate mask can be reported as two overlapping image
     # instances. Retain their actual source composition once, not two portraits.
+    image_boxes=[fitz.Rect(image['bbox']) for image in page.get_image_info()]
     photos=[e for e in elements if e.kind=="figure" and not e.metadata.get("source_text","").strip()
-            and e.asset_ids and all(book.assets[a].metadata.get("detector")=="embedded-image" for a in e.asset_ids)]
+            and e.asset_ids and (all(book.assets[a].metadata.get("detector")=="embedded-image" for a in e.asset_ids)
+            or any((fitz.Rect(e.bbox)&r).get_area()>fitz.Rect(e.bbox).get_area()*.8 for r in image_boxes))]
     for i,first in enumerate(photos):
         if first.metadata.get("render_suppressed"):continue
         for second in photos[i+1:]:
@@ -1595,12 +1877,14 @@ def _repair_page_structure(book,doc,page,outdir,elements,lines,glyphs):
         book.issues=[q for q in book.issues if not(q.get("page")==number and q["code"]=="table_grid_manual_review" and not q.get("element_id"))]
     _order_exercise_markers(elements)
     frontmatter=_annotate_page_structure(elements)
+    _restore_portrait_biographies(elements,page.rect.height)
     _chapter_rail(elements,page.rect.width)
     _assemble_inline_units(elements,glyphs)
     _assemble_statement_rows(book,elements,glyphs)
     _assemble_proof_grids(book,elements,glyphs)
     _merge_sidebar_prose(book,elements,glyphs)
     _repair_hyphenated_flow(book,elements,glyphs)
+    _detach_figure_labels(book,doc,page,outdir,elements,lines,glyphs)
     for visual in elements:
         if visual.kind not in {"figure","table"} or visual.metadata.get("render_suppressed") or visual.metadata.get("role")=="banner_background":continue
         if visual.metadata.get("table_grid"):continue
@@ -1617,6 +1901,86 @@ def _repair_page_structure(book,doc,page,outdir,elements,lines,glyphs):
             _issue(book,"source_visual_language_untranslated","Source graphic retains natural-language labels requiring explicit translation: "+" | ".join(linguistic)[:400],number,visual.id,severity="error")
     _check_word_fragments(book,elements)
     return frontmatter
+
+
+def _detach_figure_labels(book,doc,page,outdir,elements,lines,glyphs):
+    """Keep diagram geometry, make natural-language labels real task elements."""
+    for visual in list(elements):
+        if visual.kind not in {'figure','table'} or visual.metadata.get('render_suppressed'):
+            continue
+        if visual.metadata.get('table_grid') or visual.metadata.get('figure_label_ids'):
+            continue
+        label_rows=[]
+        for line in lines:
+            gs=[g for g in line['chars'] if g.get('owner')==visual.id]
+            if not gs:continue
+            raw=''.join(g['c'] for g in gs)
+            mini={**line,'chars':gs,'text':raw}
+            protected={i for a,b in _math_spans(mini) for i in range(a,b)}
+            prose=''.join(g['c'] if i not in protected else ' ' for i,g in enumerate(gs))
+            if re.search(r'[A-Za-z]{3,}',prose):
+                label_rows.append({**mini,'bbox':_rounded(_rect_union(g['bbox'] for g in gs))})
+        if not label_rows:continue
+        removed={g['id'] for row in label_rows for g in row['chars']}
+        children=[]
+        for row in label_rows:
+            child=_detached_label(book,doc,page,outdir,[row],'caption',visual.printed_page,
+                                  visual.style.get('column',0),visual.chapter,visual)
+            child.kind='figure_label'
+            child.group_id=visual.group_id or visual.id
+            child.metadata.update(parent_figure_id=visual.id,role='translated_figure_label',
+                                  source_label_bbox=list(child.bbox))
+            children.append(child)
+        old=list(visual.asset_ids)
+        background=_asset(book,doc,page,outdir,'figure',visual.bbox,'',metadata={
+            'detector':'translated-figure-background','exclude_glyph_ids':sorted(removed),
+            'detached_label_ids':[e.id for e in children],
+            'label_removal_proof':{'native_glyph_ids':sorted(removed),'graphics_removed':False}})
+        for aid in old:
+            if aid!=background.id:
+                book.assets[aid].metadata.update(superseded_by=background.id,
+                    exclusion_reason='source linguistic labels detached into translated figure-label elements')
+        visual.asset_ids=[background.id]
+        visual.metadata.update(figure_label_ids=[e.id for e in children],
+                               source_linguistic_labels_detached=True)
+        visual.metadata.pop('untranslated_linguistic_labels',None)
+        visual.metadata['glyph_ids']=[k for k in visual.metadata.get('glyph_ids',[]) if k not in removed]
+        at=elements.index(visual)+1
+        elements[at:at]=children
+        book.issues=[q for q in book.issues if not(q.get('element_id')==visual.id
+                     and q['code']=='source_visual_language_untranslated')]
+
+
+def _restore_portrait_biographies(elements,page_height):
+    """A named, dated heading next to a portrait ends inherited exercise mode.
+
+    This is source layout evidence, not a rule that all small text is biography.
+    The group also permits the following line to widen around the portrait.
+    """
+    for heading in elements:
+        source=heading.metadata.get('source_text',heading.text).strip()
+        date=re.search(r'\(\s*\d{4}\s*[–−-]\s*\d{4}\s*\)',source)
+        if not date or not source[:date.start()].strip().isupper():continue
+        size=heading.style.get('source_size',10.5)
+        if size>9.5:continue
+        portraits=[e for e in elements if e.kind=='figure' and not e.metadata.get('render_suppressed')
+                   and not e.metadata.get('source_text','').strip() and len(e.bbox)==4
+                   and e.bbox[2]<=heading.bbox[0]+6 and 25<e.bbox[2]-e.bbox[0]<150
+                   and abs(e.bbox[1]-heading.bbox[1])<22]
+        if len(portraits)!=1:continue
+        portrait=portraits[0]
+        bottom=min([e.bbox[1] for e in elements if e.kind=='heading' and e.bbox[1]>heading.bbox[3]+10]
+                   or [page_height-20])
+        for e in elements:
+            if e.kind not in {'paragraph','exercise','footnote','sidebar'} or e.metadata.get('list_label'):continue
+            if not heading.bbox[1]-2<=e.bbox[1]<bottom:continue
+            if abs(e.style.get('source_size',10.5)-size)>.35:continue
+            if e is not heading and e.bbox[2]<portrait.bbox[2]+10:continue
+            e.kind='footnote';e.group_id=heading.id
+            e.metadata.update(role='biography',biography_group=heading.id,anchor_id=portrait.id)
+        portrait.group_id=heading.id
+        portrait.metadata.update(role='biography_portrait',caption_required=False,
+                                 biography_heading_id=heading.id)
 
 
 def repair_existing_structure(book: Book, outdir) -> Book:
@@ -1690,6 +2054,46 @@ def repair_existing_structure(book: Book, outdir) -> Book:
     return repaired
 
 
+def _attach_inline_vector_symbols(book,doc,page,outdir,elements,glyphs,drawings):
+    """Preserve a vector-only symbol at a uniquely proven prose-line end."""
+    owners={e.id:e for e in elements if e.kind in {'paragraph','sidebar','footnote','exercise'}
+            and not e.metadata.get('render_suppressed')}
+    active={aid for e in elements if not e.metadata.get('render_suppressed') for aid in e.asset_ids}
+    for drawing in drawings:
+        r=fitz.Rect(drawing['rect'])
+        if not (.4<r.width<12 and 3<r.height<18):continue
+        if any((fitz.Rect(book.assets[aid].bbox)+(-.3,-.3,.3,.3)).contains(r) for aid in active):continue
+        candidates=[]
+        for eid,e in owners.items():
+            gs=[g for g in glyphs if g.get('owner')==eid and g['c'].strip()]
+            if not gs:continue
+            punctuation={'.',',',';',':','!','?'}
+            content=[g for g in gs if g['c'] not in punctuation]
+            if not content:continue
+            tail=max(content,key=lambda g:(g['origin'][1],g['bbox'][0]))
+            last=max(gs,key=lambda g:(g['origin'][1],g['bbox'][0]))
+            trailing=last['c'] if last['c'] in punctuation and last['bbox'][0]>=r.x1-.5 else ''
+            if last is not tail and not trailing:continue
+            gap=r.x0-tail['bbox'][2]
+            if (0<=gap<max(2,tail['size']*.5) and r.y0<=tail['origin'][1]<=r.y1+2
+                    and r.height<tail['size']*1.6):
+                if trailing and not e.text.rstrip().endswith(trailing):continue
+                candidates.append((e,tail,trailing))
+        if len(candidates)!=1:continue
+        owner,tail,trailing=candidates[0]
+        asset=_asset(book,doc,page,outdir,'formula',r+(-.2,-.2,.2,.2),
+                     '[original vector-only inline symbol]',tail['origin'][1],metadata={
+                     'detector':'native-inline-vector-symbol','source_drawing_index':drawing.get('source_drawing_index'),
+                     'association_proof':{'unique_paragraph_tail_glyph':tail['id'],'source_baseline':tail['origin'][1]},
+                     'unicode_identity':'not_inferred'})
+        marker=' ⟦F:'+asset.id+'⟧'
+        owner.text=owner.text.rstrip()[:-1].rstrip()+marker+trailing if trailing else owner.text+marker
+        owner.asset_ids.append(asset.id)
+        owner.metadata.setdefault('inline_vector_symbol_ids',[]).append(asset.id)
+        owner.bbox=_rounded(fitz.Rect(owner.bbox)|r)
+        active.add(asset.id)
+
+
 def _visual_regions(page, drawings, lines, structure=None):
     regions = []
     # Verified upstream layout supplies whole diagrams, while native drawing
@@ -1725,6 +2129,12 @@ def _visual_regions(page, drawings, lines, structure=None):
             if r.width < 4 or r.height < 3 or r.width > page.rect.width*.96 or r.height > page.rect.height*.75:
                 continue
             contained = [d for d in drawings if r.intersects(d["rect"])]
+            # MuPDF's cluster bounds can stop before a curve's extremum when
+            # its path crosses the CropBox. Include every visible part of the
+            # participating source paths before choosing the immutable crop.
+            expanded = (r | _rect_union(d['rect'] for d in contained)) & page.rect
+            if expanded.width <= page.rect.width*.96 and expanded.height <= page.rect.height*.75:
+                r = expanded
             complex_paths = sum(len(d["items"]) for d in contained)
             # A path-count threshold drops semantic tree edges, domino
             # outlines and diagram brackets. Geometry is retained even for a
@@ -1870,7 +2280,7 @@ def analyze(pdf_path, outdir, pages=None, backend="auto", *, ocr="auto", ocr_dpi
         if not selected or min(selected) < 1 or max(selected) > len(doc):
             raise ValueError(f"pages must be one-based physical pages in 1..{len(doc)}")
         book = Book(str(path),file_sha256(path),doc.metadata.get("title") or path.stem,len(doc),selected)
-        parser_files=[Path(__file__),Path(__file__).with_name("babel_adapter.py"),Path(__file__).with_name("table_adapter.py"),Path(__file__).with_name("paragraph_adapter.py")]
+        parser_files=[Path(__file__),Path(__file__).with_name("babel_adapter.py"),Path(__file__).with_name("table_adapter.py"),Path(__file__).with_name("paragraph_adapter.py"),Path(__file__).with_name("math_regions.py"),Path(__file__).with_name("glyph_geometry.py"),Path(__file__).with_name("drawing_geometry.py"),Path(__file__).with_name("source_flow.py"),Path(__file__).with_name("native_clipping.py"),Path(__file__).with_name("cross_page_math.py"),Path(__file__).with_name("native_containers.py"),Path(__file__).with_name("native_operators.py")]
         from .babel_adapter import available as babel_available, layout_model_identity
         signature=digest({"source":book.source_sha256,"selected_pages":selected,"backend":backend,"rules":RULES_VERSION,
                           "schema":book.schema_version,"babeldoc":babel_available(),
@@ -1923,6 +2333,11 @@ def analyze(pdf_path, outdir, pages=None, backend="auto", *, ocr="auto", ocr_dpi
                     use_babel=False
                     babel=None
             lines,glyphs=source.pop(number) if number in source else _collect(page)
+            uncertain_geometry=[g['id'] for g in glyphs if g.get('ink_geometry_error')]
+            if uncertain_geometry:
+                _issue(book,'native_math_glyph_geometry_unresolved',
+                       f'{len(uncertain_geometry)} extensible mathematical glyphs lack unambiguous native ink bounds',
+                       number,severity='error')
             book._active_glyphs=glyphs
             full_images=[image for image in page.get_image_info() if (fitz.Rect(image["bbox"])&page.rect).get_area()>page.rect.get_area()*.78]
             if full_images or any("glyphless" in g["font"].lower() for g in glyphs):
@@ -1934,7 +2349,8 @@ def analyze(pdf_path, outdir, pages=None, backend="auto", *, ocr="auto", ocr_dpi
             if babel and not structure.get("usable"):
                 detail={"reason":"Neural structure hints rejected; native source geometry remains authoritative", "coverage":structure.get("coverage"),"diagnostics":structure.get("diagnostics",[])}
                 _issue(book,"neural_structure_hints_rejected",json.dumps(detail,ensure_ascii=False),number)
-            drawings = page.get_drawings()
+            all_drawings = source_drawings(page)
+            drawings = [d for d in all_drawings if not d.get('fully_source_clipped')]
             body_sizes = [g["size"] for g in glyphs if g["c"].isalpha() and not MATH_FONT.search(g["font"])]
             body_size = statistics.median(body_sizes) if body_sizes else 10.5
             hints = babel["pages"].get(number,{}).get("formulas",[]) if babel else []
@@ -1974,7 +2390,8 @@ def analyze(pdf_path, outdir, pages=None, backend="auto", *, ocr="auto", ocr_dpi
                     g.update(owner=eid,disposition="preserved-in-asset")
                 if re.search(r"[A-Za-z]{3,}",text):
                     _issue(book,"visual_label_untranslated","Figure/table language retained in immutable source asset; review labels/cells",number,eid)
-            ordered = _order(lines,cols)
+            from .source_flow import annotate_rhs_numeric_continuations
+            ordered = annotate_rhs_numeric_continuations(_order(lines,cols),cols)
             exercise_group = None
             exercise_mode = False
             current = None
@@ -1987,6 +2404,8 @@ def analyze(pdf_path, outdir, pages=None, backend="auto", *, ocr="auto", ocr_dpi
                 original = line["text"]
                 text = original.strip()
                 subquestion=_subquestion(line)
+                rhs_numeric=line.get("rhs_numeric_continuation")
+                exercise_match=None if rhs_numeric else EXERCISE.match(text)
                 if not text:
                     for g in remaining: g.update(owner="whitespace",disposition="excluded-whitespace")
                     continue
@@ -1995,7 +2414,8 @@ def analyze(pdf_path, outdir, pages=None, backend="auto", *, ocr="auto", ocr_dpi
                 sizes = [g["size"] for g in remaining if g["c"].strip()]
                 size = statistics.median(sizes) if sizes else body_size
                 code = all(CODE_FONT.search(g["font"]) for g in remaining if g["c"].strip())
-                marginal = rect.y1 < page.rect.height*.065 or (rect.y0 > page.rect.height*.91 and size<body_size*.94 and bool(re.fullmatch(r"(?:\d+|[ivxlcdmIVXLCDM]+)",text)))
+                from .source_pages import pagination_candidates
+                marginal = rect.y1 < page.rect.height*.065 or bool(pagination_candidates(page,[line]))
                 letters=re.findall(r"[A-Za-z]",text)
                 heading = size > body_size*1.22 and (len(letters)>1 or bool(re.fullmatch(r"\d+(?:\.\d+)+",text)))
                 if marginal:
@@ -2008,7 +2428,7 @@ def analyze(pdf_path, outdir, pages=None, backend="auto", *, ocr="auto", ocr_dpi
                     kind = "caption"
                 elif heading:
                     kind = "heading"
-                elif EXERCISE.match(text) or exercise_mode:
+                elif exercise_match or exercise_mode:
                     kind = "exercise"
                 elif rect.y0>page.rect.height*.77 and size<body_size*.87:
                     kind = "footnote"
@@ -2018,18 +2438,22 @@ def analyze(pdf_path, outdir, pages=None, backend="auto", *, ocr="auto", ocr_dpi
                     kind = "paragraph"
                 if text in {"Exercises","Supplementary Exercises","Review Questions"}:
                     exercise_mode = True
-                if EXERCISE.match(text) and cols["count"]==2 and rect.y0>=cols["start_y"]-2:
+                if exercise_match and cols["count"]==2 and rect.y0>=cols["start_y"]-2:
                     exercise_mode = True
                 section=re.match(r"^(\d+(?:\.\d+){0,4})(?:\s+[A-Za-z]|$)",text) if kind=="heading" else None
                 if kind=="heading" and section:exercise_mode=False;exercise_group=None
                 if section and printed and not re.fullmatch(r"[ivxlcdmIVXLCDM]+",printed):
                     chapter="chapter-"+section[1].split(".")[0]
-                if EXERCISE.match(text):
+                if exercise_match:
                     exercise_group = eid
                 elif kind != "exercise":
                     exercise_group = None
                 assets, parts = [], []
                 spans = [] if kind in {"code","running_header"} else _math_spans(line,hints)
+                if rhs_numeric and kind not in {"code","running_header"}:
+                    end=rhs_numeric["numeric_char_end"]
+                    tail={**line,"chars":remaining[end:],"text":"".join(g["c"] for g in remaining[end:])}
+                    spans=[(0,end)]+[(a+end,b+end) for a,b in _math_spans(tail,hints)]
                 cursor = 0
                 for a,b in spans:
                     parts.append("".join(g["c"] for g in remaining[cursor:a]))
@@ -2071,7 +2495,7 @@ def analyze(pdf_path, outdir, pages=None, backend="auto", *, ocr="auto", ocr_dpi
                 metadata={"source_text":original,"glyph_ids":[g["id"] for g in remaining],
                           "source_block":line["block"],"source_line":line["line"],"recognition":"native-glyphs-babeldoc-structure" if line.get("structure_id") else "heuristic-native",
                           "structure_id":line.get("structure_id"),"structure_class":line.get("structure_class"),"structure_order":line.get("structure_order"),
-                          "list_label":EXERCISE.match(text).group(1) if EXERCISE.match(text) else (subquestion.group(1) if subquestion else None)}
+                          "list_label":exercise_match.group(1) if exercise_match else (subquestion.group(1) if subquestion else None)}
                 if section:
                     metadata["heading_level"]=section[1].count(".")+1
                     metadata["chapter_start"]=metadata["heading_level"]==1
@@ -2092,7 +2516,7 @@ def analyze(pdf_path, outdir, pages=None, backend="auto", *, ocr="auto", ocr_dpi
                 # same role/column, never across exercise/subquestion starts.
                 merge = (current is not None and current.kind==kind and kind in {"paragraph","exercise","caption","code"}
                          and (current.metadata["source_block"]==line["block"] or (kind=="exercise" and exercise_group==current.group_id)) and current.style["column"]==column
-                         and not EXERCISE.match(text) and not subquestion
+                         and not exercise_match and not subquestion
                          and (not definition_start or current.text.endswith("-"))
                          and (min(rect.x1,current.bbox[2])-max(rect.x0,current.bbox[0])>0
                               or (current.metadata["source_block"]==line["block"] and current.metadata["source_line"]==line["line"]
@@ -2119,6 +2543,8 @@ def analyze(pdf_path, outdir, pages=None, backend="auto", *, ocr="auto", ocr_dpi
                 else:
                     page_elements.append(element)
                     current=element
+                if rhs_numeric:
+                    element.metadata.setdefault("rhs_numeric_continuations",[]).append(rhs_numeric)
                 for g in remaining:
                     g.update(owner=element.id,disposition="preserved-original" if kind in {"code","formula","running_header"} else "translation-source")
             # Interleave visuals with their nearest source paragraph/caption and
@@ -2153,11 +2579,60 @@ def analyze(pdf_path, outdir, pages=None, backend="auto", *, ocr="auto", ocr_dpi
                 page_elements.insert(index,visual)
             _merge_baseline_elements(book,page_elements,glyphs)
             _merge_wrapped_elements(book,page_elements)
+            # A wrapped RHS is a source-layout accident, not a new question.
+            # Join just the proven operator/number pair as original vectors at
+            # their unchanged sizes/baselines; sentence punctuation stays text.
+            from dataclasses import replace
+            for element in page_elements:
+                for evidence in element.metadata.get("rhs_numeric_continuations",[]):
+                    matches=list(TOKEN_RE.finditer(element.text))
+                    for i,match in enumerate(matches):
+                        numeric=book.assets.get(match[1])
+                        if i==0 or numeric is None or numeric.metadata.get("glyph_ids")!=evidence["glyph_ids"]:continue
+                        prior=matches[i-1];left=book.assets.get(prior[1])
+                        if (left is None or element.text[prior.end():match.start()].strip()
+                            or not left.text.rstrip().endswith(evidence["operator"])):continue
+                        components=[left,numeric]
+                        if any(abs(a.width-(a.bbox[2]-a.bbox[0]))>.001 or abs(a.height-(a.bbox[3]-a.bbox[1]))>.001 for a in components):continue
+                        fragment=element.text[prior.start():match.end()]
+                        temporary=replace(element,text=fragment,asset_ids=[a.id for a in components])
+                        _combine_wrapped_math(book,[temporary],number,outdir)
+                        refs=TOKEN_RE.findall(temporary.text)
+                        if len(refs)!=1:continue
+                        combined=book.assets[refs[0]];x=0;segments=[]
+                        for component in components:
+                            y=combined.baseline-component.baseline
+                            segments.append({"asset_id":component.id,"source_page":number,
+                                "bbox":component.bbox,"text":component.text,
+                                "target_bbox":[x,y,x+component.width,y+component.height],
+                                "translation_only":[x-component.bbox[0],y-component.bbox[1]]})
+                            x+=component.width+1
+                        combined.metadata["source_segments"]=segments
+                        combined.metadata["native_segment_geometry"]="translation-only-recorded-v1"
+                        combined.metadata["rhs_numeric_continuation"]=evidence
+                        element.text=element.text[:prior.start()]+temporary.text+element.text[match.end():]
+                        refs=TOKEN_RE.findall(element.text)
+                        old={a.id for a in components}
+                        element.asset_ids=list(dict.fromkeys([aid for aid in element.asset_ids if aid not in old or aid in refs]+refs))
+                        break
             _combine_wrapped_math(book,page_elements,number,outdir,doc,page)
             _merge_body_continuations(book,page_elements,glyphs,page.rect.width)
             _combine_wrapped_math(book,page_elements,number,outdir,doc,page)
+            from .math_regions import assemble_native_regions
+            region_proofs=assemble_native_regions(book,doc,page,outdir,page_elements,glyphs,drawings)
+            from .native_containers import assemble_native_containers
+            region_proofs.extend(assemble_native_containers(book,doc,page,outdir,page_elements,glyphs,drawings))
+            if region_proofs:
+                affected={eid for proof in region_proofs for eid in proof['owner_ids']}
+                for element in page_elements:
+                    if element.id not in affected:continue
+                    current=[book.assets[aid].text for aid in element.asset_ids if aid in book.assets and book.assets[aid].kind=='formula']
+                    if all(t.count('(')==t.count(')') and t.count('[')==t.count(']') for t in current):
+                        book.issues=[q for q in book.issues if not(q.get('element_id')==element.id and q['code']=='formula_boundary_review')]
+            _promote_formula_prose(page_elements)
             _assemble_display_math(book,doc,page,outdir,page_elements,glyphs)
             frontmatter_role=_repair_page_structure(book,doc,page,outdir,page_elements,lines,glyphs)
+            _attach_inline_vector_symbols(book,doc,page,outdir,page_elements,glyphs,drawings)
             _order_exercise_markers(page_elements)
             _check_atomic_formulas(book,page_elements)
             _validate_source_references(book,page_elements,glyphs,number)
@@ -2178,14 +2653,19 @@ def analyze(pdf_path, outdir, pages=None, backend="auto", *, ocr="auto", ocr_dpi
             elif invalid:
                 _issue(book,"math_unicode_vector_preserved",f"{len(invalid)} source math characters lack Unicode mapping; immutable vectors preserved, textual math context needs review",number)
             graphics=[]
-            page_assets=[a for a in book.assets.values() if a.page==number]
-            for drawing_index,drawing in enumerate(drawings):
-                dr=fitz.Rect(drawing["rect"])
+            active_asset_ids={aid for e in page_elements if not e.metadata.get('render_suppressed') for aid in e.asset_ids}
+            page_assets=[book.assets[aid] for aid in active_asset_ids]
+            for drawing_index,drawing in enumerate(all_drawings):
+                original_dr=fitz.Rect(drawing['source_rect'])
+                dr=fitz.Rect(drawing['rect']) & page.rect
                 owners=[]
                 for asset in page_assets:
                     regions=[s["bbox"] for s in asset.metadata.get("source_segments",[])] or [asset.bbox]
                     if any((fitz.Rect(region)+(-1,-1,1,1)).contains(dr) for region in regions):owners.append(asset.id)
-                if owners:
+                if drawing.get('fully_source_clipped') or dr.is_empty:
+                    disposition="excluded-by-source-clipping"
+                    reason="native path has no visible extent after the original PDF clip stack and CropBox"
+                elif owners:
                     disposition="preserved-in-asset"
                     reason="original vector drawing covered by immutable asset"
                 elif any(e.kind=="table" and e.metadata.get("table_grid") and (fitz.Rect(e.bbox)+(-1,-1,1,1)).contains(dr) for e in page_elements):
@@ -2198,7 +2678,11 @@ def analyze(pdf_path, outdir, pages=None, backend="auto", *, ocr="auto", ocr_dpi
                     disposition="unresolved"
                     reason="unclassified drawing must be visually reviewed"
                     _issue(book,"source_graphic_unresolved",f"Drawing {drawing_index} at {_rounded(dr)} has no immutable content asset",number,severity="error")
-                graphics.append({"id":f"drawing-{drawing_index}","bbox":_rounded(dr),"asset_ids":owners,
+                graphics.append({"id":f"drawing-{drawing_index}","bbox":_rounded(original_dr),
+                                 "visible_bbox":_rounded(dr) if not dr.is_empty and not drawing.get('fully_source_clipped') else None,
+                                 "source_clip_bbox":drawing.get('source_clip_bbox'),
+                                 "source_clipping_evidence":drawing.get('source_clipping_evidence'),
+                                 "source_page_clipping":not page.rect.contains(original_dr),"asset_ids":owners,
                                  "disposition":disposition,"reason":reason,"color":drawing.get("color"),"fill":drawing.get("fill"),"width":drawing.get("width")})
             ledger=f"coverage/p{number:04d}.json.gz"
             with gzip.open(outdir/ledger,"wt",encoding="utf-8") as stream:
@@ -2208,7 +2692,7 @@ def analyze(pdf_path, outdir, pages=None, backend="auto", *, ocr="auto", ocr_dpi
                                "column_split":cols["split"],"column_start_y":cols["start_y"] if cols["count"]==2 else None,"column_end_y":cols.get("end_y") if cols.get("end_y",float("inf"))!=float("inf") else None,
                                "coverage":{"total_glyphs":len(glyphs),"unresolved":unresolved,
                                "dispositions":dict(Counter(g["disposition"] for g in glyphs)),"ledger":ledger},
-                               "drawings":len(drawings),"graphics_coverage":graphics,
+                               "drawings":len(all_drawings),"graphics_coverage":graphics,
                                "parser_backend":babel["backend"] if babel else "native",
                                "structure_alignment":structure_alignment,
                                "babeldoc_alignment":{k:babel["pages"].get(number,{}).get(k) for k in ("glyph_count","unassigned_glyphs","coordinate_transform")} if babel else None,
@@ -2230,5 +2714,7 @@ def analyze(pdf_path, outdir, pages=None, backend="auto", *, ocr="auto", ocr_dpi
         book.profile["analysis_processed_pages"]=len(completed)
         book.profile["analysis_complete"]=len(completed)==len(selected)
         _checkpoint_manifest(book,outdir,signature,completed)
+        from .cross_page_math import link_cross_page_formulas
+        link_cross_page_formulas(book)
         book.save(outdir/"book.json")
         return book

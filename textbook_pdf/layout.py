@@ -326,7 +326,9 @@ def _associated_groups(elements, texts, book, geometry, profile):
         connective_group = element.group_id in connective_group_ids
         if inline_group:
             cursor = index + 1
-            while (cursor < len(elements) and elements[cursor].page == element.page and
+            while (cursor < len(elements) and (elements[cursor].page == element.page or
+                   element.metadata.get('cross_page_math') == elements[cursor].metadata.get('cross_page_math')
+                   and bool(element.metadata.get('cross_page_math'))) and
                    _inline_key(elements[cursor]) == _inline_key(element)):
                 group.append(elements[cursor])
                 cursor += 1
@@ -600,9 +602,26 @@ def _asset_markup(asset_id, element_id, book, paths, width, issues, inline=True)
 def _text_markup(text, element, book, paths, width, issues):
     parts = []
     position = 0
-    for match in TOKEN_RE.finditer(text):
+    matches = list(TOKEN_RE.finditer(text))
+    skip = set()
+    for index, match in enumerate(matches):
+        if index in skip:
+            continue
         if match.start() > position:
             parts.append("#text(" + _q(text[position:match.start()]) + ")")
+        proof = book.assets[match[1]].metadata.get('cross_page_math') if match[1] in book.assets else None
+        if proof and index+1 < len(matches):
+            following = matches[index+1]
+            segments = proof['segments']
+            if (match[1] == segments[0]['asset_id'] and following[1] == segments[1]['asset_id']
+                    and not text[match.end():following.start()].strip()):
+                if sum(book.assets[s['asset_id']].width for s in segments) > width+.1:
+                    raise CompositionError('跨原页公式原尺寸超过当前栏宽，需要修正版面：'+proof['id'])
+                parts.append('#box['+''.join(_asset_markup(s['asset_id'], s['element_id'], book, paths, width, issues)
+                                             for s in segments)+']')
+                skip.add(index+1)
+                position = following.end()
+                continue
         parts.append(_asset_markup(match[1], element.id, book, paths, width, issues))
         position = match.end()
     if position < len(text):
@@ -747,13 +766,50 @@ def _banner_markup(element, text, book, paths, geometry, profile, issues, previe
     return "#tracked(" + ", ".join(args) + ")[" + body + "]\n"
 
 
+def _figure_labels_markup(element, texts, book, paths, width, profile, issues, labels, preview_ids):
+    children = [book.element_map().get(eid) for eid in element.metadata['figure_label_ids']]
+    if any(child is None for child in children) or len(element.asset_ids) != 1:
+        raise CompositionError(f'图内标签 {element.id} 的来源或背景不完整')
+    background = book.assets[element.asset_ids[0]]
+    if background.width > width + .5:
+        raise CompositionError(f'图 {element.id} 及其标签需要完整栏宽，原尺寸不能压缩')
+    aw, ah = background.width, background.height
+    content = ['#place(top + left)[' + _asset_markup(background.id, element.id, book, paths, aw, issues) + ']']
+    for child in children:
+        value = texts.get(child.id, '')
+        if not value and child.id not in preview_ids:
+            raise CompositionError(f'图内标签 {child.id} 尚未翻译')
+        w = child.bbox[2] - child.bbox[0]
+        h = max(child.bbox[3] - child.bbox[1] + 2, profile['caption_size'] * 1.4)
+        x = child.bbox[0] - background.bbox[0]
+        y = max(0, child.bbox[1] - background.bbox[1] - 1)
+        if x < -.5 or x + w > aw + .5 or y + h > ah + .5:
+            raise CompositionError(f'图内标签 {child.id} 的固定字号框超出原图，需要修正版面')
+        body = _text_markup(value or child.text, child, book, paths, w, issues)
+        label = labels.get(child.page, source_label(child)) if labels else source_label(child)
+        color = str(child.style.get('color', '202730')).lstrip('#')
+        if not re.fullmatch(r'[0-9a-fA-F]{6}', color):
+            raise CompositionError(f'图内标签 {child.id} 的来源颜色无效')
+        markup = ('#context { let label-body = [#set par(justify: false, leading: .1em)\n'
+                  '#set text(size: ' + _number(profile['caption_size']) + 'pt, fill: rgb(' + _q(color) + '))\n' + body + ']; '
+                  'let measured = measure(block(width: ' + _number(w) + 'pt, above: 0pt, below: 0pt)[#label-body]); '
+                  'if measured.height > ' + _number(h) + 'pt { panic(' + _q('图内标签溢出：' + child.id) + ') }; '
+                  'tracked(' + ', '.join((_q(child.id), _q('figure_label'), str(child.page), _q(label),
+                  _number(w) + 'pt', _number(profile['caption_size']) + 'pt', 'keep: true')) + ')[#label-body] }')
+        content.append('#place(top + left, dx: ' + _number(x) + 'pt, dy: ' + _number(y) + 'pt)[' + markup + ']')
+    return '#align(center)[#box(width: ' + _number(aw) + 'pt, height: ' + _number(ah) + 'pt)[' + ''.join(content) + ']]'
+
+
 def _element_markup(element, text, book, paths, geometry, width, profile, issues, preview=False, labels=None, columns=1,
                     texts=None, preview_ids=None, sticky_next=False, markers=(), margin_notes=(), flow_inset=0):
     if element.metadata.get("banner_background_asset_ids"):
         return _banner_markup(element, text, book, paths, geometry, profile, issues, preview, labels)
-    body = _text_markup(text, element, book, paths, width, issues)
+    has_labels = bool(element.metadata.get('figure_label_ids'))
+    body = (_figure_labels_markup(element, texts or {}, book, paths, width, profile, issues,
+                                 labels, preview_ids or set()) if has_labels else
+            _text_markup(text, element, book, paths, width, issues))
     in_text = Counter(TOKEN_RE.findall(text))
-    additional = [a for a in element.asset_ids if not in_text[a]]
+    additional = [a for a in element.asset_ids if not in_text[a]] if not has_labels else []
     if additional:
         assets = "#v(3pt)".join(_asset_markup(a, element.id, book, paths, width, issues, inline=False) for a in additional)
         body = "#align(center)[" + assets + "]" + body if element.kind in {"figure", "formula", "equation", "table", "image"} else body + assets
@@ -831,6 +887,15 @@ def _element_markup(element, text, book, paths, geometry, width, profile, issues
 def _inline_group_markup(group, texts, book, paths, geometry, width, profile, issues, labels, preview_ids, columns):
     """Join explicitly related source fragments without merging their IDs."""
     identities, bodies = [], []
+    texts = dict(texts)
+    proof = group[0].metadata.get('cross_page_math')
+    if proof:
+        first, second = proof['segments']
+        a, b = ('⟦F:'+s['asset_id']+'⟧' for s in (first, second))
+        if texts[first['element_id']].count(a) != 1 or texts[second['element_id']].count(b) != 1:
+            raise CompositionError('跨原页公式标记身份或数量不一致：'+proof['id'])
+        texts[first['element_id']] = texts[first['element_id']].replace(a, a+b)
+        texts[second['element_id']] = texts[second['element_id']].replace(b, '')
     heading = any(e.kind == "heading" for e in group)
     contents = all(e.metadata.get("frontmatter_kind") == "contents" for e in group)
     word_group = any(e.metadata.get("inline_group") for e in group)
@@ -871,7 +936,7 @@ def _inline_group_markup(group, texts, book, paths, geometry, width, profile, is
         body = _text_markup(text, element, book, paths, width, issues)
         tokens = set(TOKEN_RE.findall(text))
         for aid in element.asset_ids:
-            if aid not in tokens:
+            if aid not in tokens and not (proof and aid in {s['asset_id'] for s in proof['segments']}):
                 body += _asset_markup(aid, element.id, book, paths, width, issues)
         if element.id in preview_ids and not word_group:
             body = '#text(size: 8pt, fill: rgb("b83a24"), "【未翻译原文】")' + body
@@ -986,7 +1051,7 @@ def _build_source(book, translations, outdir, geometry, paths, allow_incomplete,
         rail_anchors[anchor.id], rail_ids = rail, rail_ids | set(ids)
     visible = [e for e in book.elements if e.kind not in _PERIPHERAL and e.id not in table_children
                and e.id not in attached_markers and not e.metadata.get("rendered_by_heading")
-               and not e.metadata.get("render_suppressed") and e.id not in rail_ids]
+               and not e.metadata.get("render_suppressed") and not e.metadata.get('parent_figure_id') and e.id not in rail_ids]
     if not visible:
         raise CompositionError("所选页面只有页眉或页码，没有正文可排版")
     margin_notes, margin_ids = _margin_attachments(visible, geometry)
@@ -1209,6 +1274,16 @@ def _layout_map(book, traces, geometry, output, issues):
                            "page": asset.page, "detail": f"对象预期出现 {expected} 次，实际记录 {len(occurrences)} 次"})
         for occurrence in occurrences:
             owner = book.element_map().get(occurrence.get("element_id"))
+            if owner and owner.metadata.get('figure_label_ids') and asset.metadata.get('detector')=='translated-figure-background':
+                label_ids=owner.metadata['figure_label_ids']
+                regions=[r['bbox'] for eid in label_ids for r in elements.get(eid,[])
+                         if r.get('page')==occurrence['page']]
+                if len(regions)!=len(label_ids):
+                    issues.append({'code':'figure_label_trace_missing','severity':'error','element_id':owner.id,
+                                   'page':owner.page,'detail':'图内译文没有与背景同页的完整位置证据'})
+                occurrence['translated_label_regions']=regions
+                occurrence['translated_label_ids']=list(label_ids)
+                occurrence['translated_label_regions_precision']='measured-figure-labels'
             heading_id = owner.metadata.get("rendered_by_heading") if owner else None
             heading = book.element_map().get(heading_id)
             if heading and asset_id in heading.metadata.get("banner_background_asset_ids", []):
@@ -1244,6 +1319,8 @@ def _layout_map(book, traces, geometry, output, issues):
                 issues.append({"code": "detached_caption" if not limit else "detached_explanation", "severity": "error",
                                "element_id": element.id, "anchor_id": anchor_id, "page": element.page,
                                "detail": f"图表与关联内容相距 {distance} 张译文页"})
+    from .cross_page_math import check_joined_math_geometry
+    issues.extend(check_joined_math_geometry(book, assets))
     pages = [{"page": page, "width": geometry["width"], "height": geometry["height"],
               "source_pages": sorted(page_sources[page]),
               "source_labels": [page_sources[page][p] for p in sorted(page_sources[page])]}
@@ -1267,7 +1344,7 @@ def _partition_book(book):
                       if e.group_id and e.kind in {"figure", "image", "table"}}
     spans = {}
     for element in book.elements:
-        if element.group_id in graphic_groups:
+        if element.group_id in graphic_groups or element.metadata.get('cross_page_math'):
             position = page_index[element.page]
             lo, hi = spans.get(element.group_id, (position, position))
             spans[element.group_id] = (min(lo, position), max(hi, position))

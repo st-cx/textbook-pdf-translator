@@ -1,0 +1,75 @@
+{
+  "recorded_on": "2026-10-22",
+  "kind": "bounded_source_formula_ink_risk_finding",
+  "source_generation": "source-v41",
+  "source_book_sha256": "5e8613fef6c2b0dac5bc38db3b5d67ab7aaa3cabc05cd68b829d5cbec92f6603",
+  "source_pdf_sha256": "cdf36691e43fef9c7f7140daea5e99c0f65d3af772136c64e9bd31a8a5b1d65c",
+  "private_evidence_report_sha256": "930c388700ac8f015f3171f31cde87b8e28ca787a7f68cc2964927774be842f2",
+  "scope": "Current unsuppressed formula references with original glyph IDs; all embedded font families eligible. Not all book glyphs or all mathematical objects.",
+  "counts": {
+    "pages_checked": 1080,
+    "assets_eligible": 52662,
+    "glyph_occurrences_eligible": 275899,
+    "glyph_occurrences_rendered": 272251,
+    "native_ink_outside_nominal_glyph_bbox": 71604,
+    "enclosure_risk_glyph_occurrences": 13736,
+    "confirmations_attempted": 11790,
+    "glyph_occurrences_unverifiable": 3648,
+    "unique_native_matrix_glyph_rasters_rendered": 2003
+  },
+  "screen_classifications": {
+    "core-ink-outside-clip": 11790,
+    "antialias-fringe-only-screen": 1946
+  },
+  "local_confirmation_classifications": {
+    "visible-ink-loss-candidate": 9324,
+    "unverifiable": 1885,
+    "not_attempted_fringe": 1946,
+    "no-confirmed-loss-in-local-source-visible-core-test": 581
+  },
+  "screen_unverifiable_reasons": {
+    "embedded native font program unavailable or ambiguous": 1157,
+    "assembled object has no unique source glyph segment": 2360,
+    "cross-page source mapping needs separate validated transform": 22,
+    "native glyph/operator origin identity ambiguous or context dependent": 109
+  },
+  "confirmation_unverifiable_reasons": {
+    "target native identity/position is ambiguous or absent": 1839,
+    "target effective native linear matrix changed": 46
+  },
+  "unique_screen_risk_assets": 13509,
+  "unique_visible_ink_loss_candidate_assets": 9242,
+  "seconds_on_this_host": 321.936,
+  "method": {
+    "original_embedded_font_sha_and_native_glyph_identity": true,
+    "original_complete_native_linear_matrix": true,
+    "raster_pixels_per_point": 8,
+    "core_alpha_minimum": 128,
+    "existing_antialias_tolerance_pixels": 1,
+    "actual_target_asset_font_matrix_and_origin_checked": true,
+    "confirmation_uses_core_ink_visible_on_composed_original_page": true
+  },
+  "direct_visual_review": {
+    "source_physical_pages": [
+      112,
+      395
+    ],
+    "reviewed_examples": 2,
+    "cropped_italic_edge_loss_observed": true,
+    "all_candidates_visually_reviewed": false
+  },
+  "limitations": [
+    "A nominal glyph bbox overflow alone is not damaged content.",
+    "Local visible-core-loss candidates require repair and independent original/crop review; these counts are not a book error rate.",
+    "Fringe-only candidates and unverifiable mappings remain separate.",
+    "Older output-to-crop pixel passes do not prove that the old source crop preserved all original ink.",
+    "This audit is bound to source-v41; it cannot certify a later source without a new audit or verified object identity transfer.",
+    "The audit is experimental and has not yet been integrated as the general production QA gate."
+  ],
+  "remediation_complete": false,
+  "source_formula_acceptance_complete": false,
+  "full_book_accepted": false,
+  "competitor_leadership_established": false,
+  "book_text_or_assets_published": false,
+  "external_api_calls": 0
+}

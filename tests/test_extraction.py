@@ -25,6 +25,78 @@ def line(text,font="STIXGeneral-Regular",flags=0):
 
 
 class ExtractionUnitTests(unittest.TestCase):
+    def test_mathjax_font_does_not_turn_prose_connectors_into_untranslated_formula(self):
+        row = line('x and y', font='STIXMathJax_Main-Italic', flags=2)
+        protected = ''.join(row['text'][a:b] for a,b in _math_spans(row))
+        self.assertNotIn('and', protected)
+        self.assertIn('x', protected)
+        self.assertIn('y', protected)
+
+    def test_italic_scripted_variable_after_list_punctuation_stays_protected(self):
+        row = line(', xn, then', font='STIXGeneral-Italic', flags=2)
+        row['chars'][3]['size'] = 7
+        row['chars'][3]['origin'][1] += 2.6
+        spans = _math_spans(row)
+        self.assertTrue(any(row['text'][a:b] == 'xn' for a,b in spans), spans)
+        self.assertFalse(any('then' in row['text'][a:b] for a,b in spans))
+
+    def test_visible_path_extent_is_preserved_even_when_cluster_stops_early(self):
+        import pymupdf as f
+        path = f.Rect(20, 70, 100, 126)
+        page = SimpleNamespace(rect=f.Rect(0, 0, 160, 120),
+            get_image_info=lambda: [], cluster_drawings=lambda **kw: [f.Rect(20, 70, 100, 100)],
+            find_tables=lambda: SimpleNamespace(tables=[]))
+        drawings = [{'rect': path, 'items': [('c',)], 'fill': None, 'color': (0, 0, 0)}]
+        regions = _visual_regions(page, drawings, [])
+        self.assertEqual(len(regions), 1)
+        self.assertTrue(f.Rect(regions[0]['bbox']).contains(path & page.rect))
+
+    def test_chapter_contents_merge_retains_formula_identity(self):
+        from textbook_pdf.extraction import _assemble_inline_units
+        a = Element('a', 'sidebar', '1.1 Relations', 1, [10, 10, 80, 20],
+                    metadata={'role': 'chapter_contents', 'heading_group': 'a', 'glyph_ids': ['ga']})
+        b = Element('b', 'sidebar', '1.2 ⟦F:n⟧ary Relations', 1, [10, 22, 80, 32],
+                    asset_ids=['n'], metadata={'role': 'chapter_contents', 'heading_group': 'a', 'glyph_ids': ['gb']})
+        book = Book('source.pdf', 'source', 'Fixture', 1, [1])
+        glyphs = [{'id': 'ga', 'owner': 'a'}, {'id': 'gb', 'owner': 'b'}]
+        _assemble_inline_units([a, b], glyphs)
+        self.assertEqual(a.asset_ids, ['n'])
+        self.assertTrue(b.metadata['render_suppressed'])
+        self.assertEqual(glyphs[1]['owner'], 'a')
+
+    def test_upright_function_names_need_a_mathematical_operand(self):
+        text = "cos(x) + sin(y) = 1"
+        row = line(text)
+        for g in row['chars']:
+            if g['c'] in {'x', 'y'}:
+                g.update(font='STIXGeneral-Italic', flags=2)
+        self.assertEqual(_math_spans(row), [(0, len(text))])
+        for prose in ('Read the log file.', 'Use the min and max settings.'):
+            self.assertEqual(_math_spans(line(prose)), [])
+
+    def test_upright_computer_identifier_is_a_complete_operand(self):
+        text = 'Set x = CS1 in the statement.'
+        row = line(text)
+        row['chars'][4].update(font='STIXGeneral-Italic', flags=2)
+        spans = [text[a:b] for a, b in _math_spans(row)]
+        self.assertIn('x = CS1', spans)
+        self.assertFalse(any('statement' in value for value in spans))
+
+    def test_scripted_variable_product_is_not_italic_prose(self):
+        row = line('lnln', 'STIXGeneral-Italic', 2)
+        for g in (row['chars'][1], row['chars'][3]):
+            g['size'] = 7
+            g['origin'][1] += 3
+        self.assertEqual(_math_spans(row), [(0, 4)])
+        self.assertEqual(_math_spans(line('hypothesis', 'STIXGeneral-Italic', 2)), [])
+
+    def test_parenthesized_upright_function_keeps_its_opening(self):
+        row = line('(cos x + i sin x)')
+        for g in row['chars']:
+            if g['c'] in {'x', 'i'}:
+                g.update(font='STIXGeneral-Italic', flags=2)
+        self.assertEqual(_math_spans(row), [(0, len(row['text']))])
+
     def test_three_wrapped_segments_have_one_exact_asset_owner(self):
         import pymupdf
         doc=pymupdf.open();page=doc.new_page(width=300,height=200)
@@ -297,7 +369,16 @@ class RealSourceExtractionTests(unittest.TestCase):
 
     def test_display_fractions_keep_the_whole_original_region(self):
         for number,minimum_bars in ((112,3),(114,1)):
-            displays=[a for a in self.book.assets.values() if a.page==number and a.metadata.get("display_math")]
+            active={aid for e in self.book.elements if e.page==number
+                    and not e.metadata.get('render_suppressed') for aid in e.asset_ids}
+            # Both assemblers must meet the same original-object contract.
+            # A legacy display tag alone does not establish active preservation.
+            displays=[self.book.assets[aid] for aid in active if self.book.assets[aid].page==number
+                      and (self.book.assets[aid].metadata.get('display_math')
+                      or (self.book.assets[aid].metadata.get('detector')=='native-math-connected-region-v1'
+                          and self.book.assets[aid].metadata.get('native_glyph_geometry_preserved')
+                          and self.book.assets[aid].metadata.get('source_text_is_positioned_runs')
+                          and self.book.assets[aid].metadata.get('fraction_bar_bboxes')))]
             self.assertTrue(displays,f"No complete native display on source{number}")
             target=max(displays,key=lambda a:len(a.metadata.get("fraction_bar_bboxes",[])))
             self.assertGreaterEqual(len(target.metadata["fraction_bar_bboxes"]),minimum_bars)
@@ -309,6 +390,10 @@ class RealSourceExtractionTests(unittest.TestCase):
                 self.assertAlmostEqual(crop.rect.width,target.width,places=3)
                 self.assertAlmostEqual(crop.rect.height,target.height,places=3)
             self.assertTrue(target.metadata["native_glyph_geometry_preserved"])
+            self.assertTrue(target.metadata['selected_native_glyphs_verified'])
+            self.assertFalse(target.metadata.get('isolation_issues'))
+            self.assertEqual(sum(target.id in e.asset_ids for e in self.book.elements
+                                 if not e.metadata.get('render_suppressed')),1)
 
     def test_statement_labels_and_proof_reasons_keep_rows(self):
         p115=[plain_text(e,self.book) for e in self.book.elements if e.page==115 and not e.metadata.get("render_suppressed")]

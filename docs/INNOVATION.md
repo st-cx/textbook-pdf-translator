@@ -1,5 +1,7 @@
 # 工程特色、已有方案与验证边界
 
+2026-10-22 新增的工程改进：原生可伸展数学字形的可见边界、保留双重来源的跨页公式续接、图内标签任务与区域化背景检查，以及按原 PDF 裁剪栈核对路径。实现和剩余问题见 [Rosen 进展](ROSEN_PROGRESS.md)。尚未完成同条件竞品实测，不据此宣称行业首创或整体领先。
+
 核查日期：2026-10-21。使用 GitHub 官方 API/gh 读取官方 README 和源码；以下链接固定到核查时默认分支的具体提交。**本工具不是 OCR、公式保护、术语表、翻译缓存或并发翻译的首创项目。** 这些已有成熟实现，公开介绍应明确复用关系。
 
 
@@ -67,6 +69,16 @@
 
 术语方面，本工具当前是固定术语规则、提议收集和协调更新；不能把实施计划中的“翻译前自动生成并验完全书术语”当作已经实现的交付。冻结风格规则和抽样复核，也不等于已经证明全书风格完全一致。
 
+### rc.3 中可以复现的原生数学对象修复
+
+在固定 PyMuPDF/MuPDF 1.28.2 路径中，名义字体框和字形 advance 不能单独代表可见笔画范围。rc.3 分别处理两个可复现问题：高括号等可伸展字形的真实墨迹超出名义框；零字宽组合否定斜线因空裁剪框被删除。前者按原嵌入字体及原 glyph ID 测量笔画范围，后者保留原生文字操作符，不将公式改写为 Unicode 近似或图片重绘。[原生裁剪适配](../textbook_pdf/native_clipping.py)、[字形几何](../textbook_pdf/glyph_geometry.py)
+
+另一种情况是组合符的 `rawdict` 逻辑原点随相邻上下文变化，而原 PDF 操作符实际没有移动。普通字符继续采用原有位置容差；仅对有零 advance 证据的组合符，要求唯一原生 glyph ID、同一嵌入字体程序及完整有效操作符矩阵相符。该替代证据使用更严格的原点容差，歧义或真实移位仍阻断。公开自创小字体可重现这些情况，无需教材或系统字体。[回归用例](../tests/test_native_operator_identity.py)
+
+这些是特定 PDF 处理链的工程修复与可审计证据，不据此宣称原创 PDF 引擎、研究首创或整体领先。源字形存在、可见裁框、成品像素和数学含义仍分别验收。
+
+裁片中“未被选中的字符”也不一定是可删除的污染：它可能是二项式、矩阵或上下限的成员。rc.3的全书排查保留这类尚未证实的结构阻断；仅有所选字形一致、零外字或零裁框越界，均不足以关闭它。局部修复须证明选取集合本身包含完整数学关系。
+
 ## 项目定位与明确边界
 
 > 面向大型教材的中文 PDF 翻译与阅读排版工作流。复用 BabelDOC、Typst、PyMuPDF 和本地 OCR/检测组件，重点处理原始数学对象、允许增页的中文排版、来源页码，以及 API/代理共用的可恢复任务与质量记录。它是持续验证中的工程集成，不承诺任意教材自动无损转换。
@@ -79,11 +91,11 @@
 
 | 模块 | SHA256 |
 |---|---|
-| [textbook_pdf/layout.py](../textbook_pdf/layout.py) | `a94d48ea239d728573c6ed4ccf70f58632190020ad455791e830d3c5389dbab2` |
+| [textbook_pdf/layout.py](../textbook_pdf/layout.py) | `8cfe6bf20152fc01e2343f18da6e240328c06d9765229b4728912d55f0a62854` |
 | [textbook_pdf/templates/book.typ](../textbook_pdf/templates/book.typ) | `81bd5b1b2cb7cb6e2879618170d772e99776816c3cb60468c028fe27904b445e` |
-| [textbook_pdf/store.py](../textbook_pdf/store.py) | `b234e0c15bfb1396f8ca5785743fc6fe37883642ff2a2235fd63cee1a6e010ef` |
-| [textbook_pdf/translation.py](../textbook_pdf/translation.py) | `9c7ce52ac3c7902851acf8d62feedd45e7ae11164df265566ac25fbb087ba6c9` |
+| [textbook_pdf/store.py](../textbook_pdf/store.py) | `a04b81800205a903e546a304baa00ab7881b0bbb536e10d331d8c4265313fd85` |
+| [textbook_pdf/translation.py](../textbook_pdf/translation.py) | `37d5318c55232a75ddb9a5916ac4f5f4440bd7f3479df1c10e90c709ecf88c78` |
 | [textbook_pdf/scan_adapter.py](../textbook_pdf/scan_adapter.py) | `59dd267550f498d4a99d334858a5bc3ba26df3e5c78ab7d5656fe896bca94863` |
-| [textbook_pdf/qa.py](../textbook_pdf/qa.py) | `ff7f1b7dc3a7b51d171f2341d3f4d5abb9684914fed679bfdee9984c7a0dd2a5` |
+| [textbook_pdf/qa.py](../textbook_pdf/qa.py) | `e7dc501309bcd8cc3b13f43edf3aa59e47e824da570a83391b8cae5fe088c592` |
 
 上游 README 的功能说明属于项目自身声明；源码检查证明相应路径存在，不证明所有输入都能成功。未检出的功能不能据此断言“不存在”。本次只选 Docling 作为第三个解析项目，没有对 Marker/MinerU 或整个领域做穷尽式查新。

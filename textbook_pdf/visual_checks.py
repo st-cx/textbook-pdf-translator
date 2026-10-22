@@ -50,6 +50,45 @@ def _bitmap(page):
     return pixels, pixmap.x, pixmap.y
 
 
+def _mask_figure_labels(source, target, bbox, record, asset):
+    """Compare preserved diagram geometry outside measured translated labels.
+
+    This does not certify label text or ink under a label. Child formula objects
+    receive independent checks; label language and placement require review.
+    """
+    if (asset.metadata.get('detector') != 'translated-figure-background'
+            or record.get('translated_label_regions_precision') != 'measured-figure-labels'
+            or not asset.metadata.get('label_removal_proof', {}).get('native_glyph_ids')
+            or set(record.get('translated_label_ids', [])) != set(asset.metadata.get('detached_label_ids', []))):
+        raise ValueError('Translated-label comparison lacks bound source and measured child evidence')
+    regions = record.get('translated_label_regions', [])
+    if not regions:
+        raise ValueError('Translated-label comparison has no measured regions')
+    result = []
+    fractions = []
+    for pixels in (source, target):
+        copy = pixels.copy()
+        mask = np.zeros(copy.shape, dtype=bool)
+        for value in regions:
+            rect = _rectangle(value)
+            if not (bbox + (-.3, -.3, .3, .3)).contains(rect):
+                raise ValueError('Translated label leaves its source diagram')
+            x0 = max(0, math.floor((rect.x0 - bbox.x0) / bbox.width * copy.shape[1]) - 1)
+            x1 = min(copy.shape[1], math.ceil((rect.x1 - bbox.x0) / bbox.width * copy.shape[1]) + 1)
+            y0 = max(0, math.floor((rect.y0 - bbox.y0) / bbox.height * copy.shape[0]) - 1)
+            y1 = min(copy.shape[0], math.ceil((rect.y1 - bbox.y0) / bbox.height * copy.shape[0]) + 1)
+            mask[y0:y1, x0:x1] = True
+        fraction = float(mask.mean())
+        if fraction > .6:
+            raise ValueError('Too little unmasked diagram remains for a background integrity pass')
+        copy[mask] = 255
+        result.append(copy)
+        fractions.append(fraction)
+    return (*result, {'comparison_scope': 'diagram background outside measured translated-label regions',
+                     'label_semantics_certified': False,
+                     'masked_fraction': max(fractions), 'masked_regions': regions})
+
+
 def _ink(pixels):
     border = np.concatenate((pixels[0], pixels[-1], pixels[:, 0], pixels[:, -1]))
     background = float(np.median(border))
@@ -282,7 +321,9 @@ def compare_assets(book, layout_map, pdf_path, outdir, limit=None) -> dict:
             if isinstance(record, dict):
                 reason = record.get("visual_check_exclusion_reason") or reason
                 has_overlays = record.get("translated_label_regions") or asset.metadata.get("translated_label_regions")
-                if has_overlays and not reason:
+                region_check = (has_overlays and asset.metadata.get('detector')=='translated-figure-background'
+                                and record.get('translated_label_regions_precision')=='measured-figure-labels')
+                if has_overlays and not reason and not region_check:
                     reason = "Translated-label overlays change visible pixels; region-aware comparison has not been supplied"
             if reason:
                 report["skipped"] += 1
@@ -384,7 +425,12 @@ def compare_assets(book, layout_map, pdf_path, outdir, limit=None) -> dict:
                     target = output_pixels[top:bottom, left:right].copy()
                     if not source_pixels.size or not target.size:
                         raise ValueError("Protected object has an empty raster")
-                    status, code, metrics = _compare(source_pixels, target)
+                    comparison_source = source_pixels
+                    label_metrics = {}
+                    if record.get('translated_label_regions'):
+                        comparison_source, target, label_metrics = _mask_figure_labels(source_pixels, target, bbox, record, asset)
+                    status, code, metrics = _compare(comparison_source, target)
+                    metrics.update(label_metrics)
                     metrics.update({"asset_id": aid, "source_page": asset.page, "source_bundle": str(source),
                                     "source_bundle_page": source_index + 1, "output_page": page_number,
                                     "output_bbox": list(bbox), "element_id": record.get("element_id"),

@@ -209,6 +209,29 @@ def verify(book, translations, outdir, pdf_path=None, layout_map=None, extra_iss
         if key not in existing_scan_keys:issues.append(issue);existing_scan_keys.add(key)
     def add(code,detail,severity='error',**kw):
         issues.append(dict(code=code,detail=detail,severity=severity,**kw))
+    native_source={'status':'not_applicable','all_eligible_glyph_counts_present':None,
+                   'scope':'Native source glyph identities before output composition; not formula semantics.'}
+    if any(asset.metadata.get('glyph_ids') for asset in book.assets.values()):
+        from .source_integrity import audit_native_assets
+        try:
+            audit=audit_native_assets(book,outdir,outdir/'source_integrity')
+            issues.extend(audit['issues'])
+            native_source={k:v for k,v in audit.items() if k not in {'issues','page_results'}}
+            native_source['status']=('present' if audit['all_eligible_glyph_counts_present'] is True
+                                     else 'review_required' if audit['all_eligible_glyph_counts_present'] is False
+                                     else 'not_applicable')
+            native_source['report_path']='source_integrity/source-native-glyph-audit.json'
+        except (OSError,ValueError,RuntimeError,KeyError,TypeError) as error:
+            native_source['status']='unavailable'
+            add('native_source_integrity_unavailable','原生保护对象字形检查未完成：'+type(error).__name__)
+    pagination={'status':'not_run','reason':'No original PDF with a content identity is available.'}
+    if Path(book.source_path).is_file() and len(book.source_sha256)==64:
+        from .source_pages import audit_source_pages
+        pagination=audit_source_pages(book)
+        issues.extend(pagination['issues'])
+        (outdir/'source_page_audit.json').write_text(json.dumps(pagination,ensure_ascii=False,indent=2),encoding='utf8')
+        pagination={k:v for k,v in pagination.items() if k not in {'issues','pages'}}
+        pagination['report_path']='source_page_audit.json'
     scan_style=book.profile.get('scan_composition')
     if scan_style:
         style_source=Path(__file__).with_name('scan_layout.py')
@@ -328,6 +351,10 @@ def verify(book, translations, outdir, pdf_path=None, layout_map=None, extra_iss
             if ps and max(ps)-min(ps)>1:add('anchor_distance','图表与相关内容相隔超过一页',group_id=gid,source_pages=sorted({e.page for e in els}))
         for p in layout_map.get('pages',[]):
             if not p.get('source_pages'):add('source_label_missing','输出页缺少原书页码映射',output_page=p.get('page'))
+        from .source_pages import check_output_source_labels
+        issues.extend(check_output_source_labels(book,layout_map,pdf_path))
+        from .cross_page_math import check_joined_math_geometry
+        issues.extend(check_joined_math_geometry(book, assets))
     visual=_visual_summary(book,reason='缺少成品PDF或可用的实际位置记录，尚未执行像素核对。')
     if pdf_path and Path(pdf_path).is_file() and isinstance(layout_map,dict) and isinstance(layout_map.get('assets'),dict):
         try:
@@ -350,6 +377,8 @@ def verify(book, translations, outdir, pdf_path=None, layout_map=None, extra_iss
     report={'schema_version':2,'title':book.title,'source_pages':len(book.selected_pages),'output_pages':page_count,'elements':len(book.elements),'accepted_translations':len(translations),'missing_translations':len(missing),'protected_assets':len(book.assets),'technical_checks_passed':not errors,'acceptance_status':'needs_visual_and_semantic_review' if not errors else 'incomplete','visual_review':'protected_asset_pixels_only' if visual['status']!='not_run' else 'not_claimed','manual_visual_review':'not_claimed','visual_asset_checks':visual,'semantic_review':'see task diagnostics','errors':len(errors),'warnings':len(warnings),'issues':issues}
     report['render_revision']=render_revision
     report['scan_source_checks']=scans
+    report['native_source_glyph_checks']=native_source
+    report['source_pagination_checks']=pagination
     report['assembled_source_elements']=list(assembled.values())
     if semantic_status is not None:
         report['semantic_review']=semantic_status

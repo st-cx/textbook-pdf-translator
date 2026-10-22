@@ -7,11 +7,11 @@
   "inputs": [
     {
       "path": "generated/original-counting-en.pdf",
-      "sha256": "d0f51ed0f4151fde011c15404bc9a386fcacc5c1abdf7173d52f3709bacc921b"
+      "sha256": "08bf37b96654d5de6399ae00b929c104f899e28c49c5c7cffc25788335ea0b7f"
     },
     {
       "path": "generated/original-counting-image-only.pdf",
-      "sha256": "7e3130838283772ea2da5fd7a87b5848bdffb29989d7cd4bbae5ec23e4c34937"
+      "sha256": "48ff1f89b6aad4a94589a87c535611ea897ee38041597adea7a5b76418bbd70d"
     }
   ],
   "source_preview": {
@@ -20,7 +20,7 @@
   },
   "reproducible_script": {
     "path": "build_demo.py",
-    "sha256": "bde43cc9007d504fb0fe909c83dd7eec0a9bc89ffb24668c5df8cf4acc06f46f"
+    "sha256": "da4138dad99755d7ae8616a1e25a35c6ae5dbafbef5b77c92cd35e31644628b1"
   },
   "body_font": "Noto Serif SC (locally installed, not copied)",
   "heading_font": "Noto Sans SC (locally installed, not copied)",
@@ -28,14 +28,14 @@
   "native_source_text_characters": 1122,
   "raster_source_text_characters": 0,
   "raster_source_outline_entries": 0,
-  "actual_build_seconds": 2.54,
+  "actual_build_seconds": 2.616,
   "variants": [
     {
       "variant": "native",
       "source_pdf": "generated/original-counting-en.pdf",
-      "source_sha256": "d0f51ed0f4151fde011c15404bc9a386fcacc5c1abdf7173d52f3709bacc921b",
+      "source_sha256": "08bf37b96654d5de6399ae00b929c104f899e28c49c5c7cffc25788335ea0b7f",
       "output_pdf": "generated/native/counting-native-zh.pdf",
-      "output_sha256": "01c96263fcac780ae472badc838a7dfe7e0dee30f79ad21ed00115ecb2f3556d",
+      "output_sha256": "7515fc34f7701c9c6881aecc39025c31adeee369205dfb9f8453512fbbef74a7",
       "output_pages": 1,
       "source_elements": 11,
       "accepted_authored_translations": 9,
@@ -43,12 +43,12 @@
       "qa_errors": 0,
       "qa_warnings": 0,
       "embedded_font_names": [
+        "CVOSYG+NotoSerifSC-ExtraLight",
         "Courier",
         "Helvetica",
         "RYZCGL+NotoSansSC-Thin",
         "Times-Italic",
-        "Times-Roman",
-        "WTZXEX+NotoSerifSC-ExtraLight"
+        "Times-Roman"
       ],
       "observed_chinese_font_sizes_pt": [
         7.5,
@@ -63,15 +63,15 @@
       "protected_asset_passed": 4,
       "preview": {
         "path": "generated/native/preview-001.png",
-        "sha256": "5ad72cddb8c09cd8d73e2c0312805901401ef7113f9f1290cd4c92bfe4ac1bb3"
+        "sha256": "4eaf4f41b03ed34ff31f19af424c1d0582117507ca356508ef694c228b5c1f71"
       }
     },
     {
       "variant": "raster",
       "source_pdf": "generated/original-counting-image-only.pdf",
-      "source_sha256": "7e3130838283772ea2da5fd7a87b5848bdffb29989d7cd4bbae5ec23e4c34937",
+      "source_sha256": "48ff1f89b6aad4a94589a87c535611ea897ee38041597adea7a5b76418bbd70d",
       "output_pdf": "generated/raster/counting-raster-zh.pdf",
-      "output_sha256": "7eeedbfdc32f80e4202af6386875053c044d0be9920e7d194fecdbec97eb5c33",
+      "output_sha256": "216f89e4f6d46a407997b913ce21bcaddb6e29d05706dd164fddf8e39dfe1584",
       "output_pages": 1,
       "source_elements": 11,
       "accepted_authored_translations": 9,
@@ -79,8 +79,8 @@
       "qa_errors": 0,
       "qa_warnings": 0,
       "embedded_font_names": [
-        "RYZCGL+NotoSansSC-Thin",
-        "WTZXEX+NotoSerifSC-ExtraLight"
+        "CVOSYG+NotoSerifSC-ExtraLight",
+        "RYZCGL+NotoSansSC-Thin"
       ],
       "observed_chinese_font_sizes_pt": [
         7.5,
@@ -95,7 +95,7 @@
       "protected_asset_passed": 4,
       "preview": {
         "path": "generated/raster/preview-001.png",
-        "sha256": "db08f593b900827e362f1d7f4fdca84c0451b05bdd523faf05542e9b3bfd0dfb"
+        "sha256": "72c56decff0ab58b90ecf223a08bc69e6457927329f92237f459f5138f3b5dd0"
       }
     }
   ],
@@ -107,5 +107,6 @@
     "固定字号流式重排后保留自然留白，不拉伸段落充满原页。",
     "生成成功、像素通过和本小样本目视检查不代表大型教材、真实扫描噪声或多章一致性已经验收。",
     "重建后的PDF哈希可能变化，必须重新检查；本记录只绑定列出的当前文件。"
-  ]
+  ],
+  "version": "2.0.0rc3"
 }

@@ -571,6 +571,33 @@ class PipelineTests(unittest.TestCase):
         self.assertEqual(self.usage_rows(other)[0]["http_status"], 401)
         self.assertEqual(other.translations(), {})
 
+    def test_account_error_stops_batch_without_spending_requests_on_other_tasks(self):
+        for status in (401, 402, 403):
+            with self.subTest(status=status):
+                book = self.book([Element(f'e{i}', 'exercise', f'{i}. Prove this statement.', 1)
+                                  for i in range(1, 9)])
+                store = self.store(book)
+                store.add_tasks(translation.make_tasks(book, {}, target_chars=1))
+                with patch.object(translation, '_chat', side_effect=translation._HTTPFailure(status)) as api:
+                    report = translation.run_translation(book, store, self.config, workers=1)
+                self.assertEqual(api.call_count, 1)
+                self.assertEqual(report['provider_blocked']['http_status'], status)
+                self.assertEqual(store.db.execute("select count(*) from tasks where state='pending'").fetchone()[0], 7)
+                self.assertEqual(store.translations(), {})
+
+    def test_account_error_stops_remaining_review_batches_without_rejecting_text(self):
+        book = self.book([Element(f'e{i}', 'exercise', f'{i}. Prove this statement.', 1)
+                          for i in range(1, 45)])
+        store = self.store(book)
+        for element in book.elements:
+            store.put_candidate(element.id, f'{element.id[1:]}. 证明这个命题。', 'fixture')
+        with patch.object(translation, '_chat', side_effect=translation._HTTPFailure(402)) as api:
+            report = translation.run_review(book, store, self.config, 'deepseek', workers=1)
+        self.assertEqual(api.call_count, 1)
+        self.assertEqual(report['provider_blocked']['http_status'], 402)
+        self.assertEqual(report['review_pending'], 44)
+        self.assertEqual(len(store.translations()), 44)
+
     def test_changed_glossary_supersedes_leased_task_and_prevents_old_submit(self):
         book = self.book([Element("e1", "paragraph", "A set is given.", 1)])
         old_glossary, new_glossary = {"set": "集合"}, {"set": "集"}

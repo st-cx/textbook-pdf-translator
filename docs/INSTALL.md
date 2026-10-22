@@ -10,7 +10,7 @@ cd textbook-pdf-translator
 powershell -ExecutionPolicy Bypass -File .\安装依赖.ps1
 ```
 
-安装器创建本目录 `.venv`，安装 `requirements-lock.txt`，从 Typst 官方 release 下载并核对固定 SHA256，再显式准备本地识别模型。不读取教材、配置密钥或启动翻译。扫描模型的许可及归属见 [THIRD_PARTY.md](../THIRD_PARTY.md)，包括 MFD 权重的上游许可声明差异。源仓库不包含模型、字体、教材或私人任务库。
+安装器创建本目录 `.venv`，安装 `requirements-lock.txt`，从 Typst 官方 release 下载并核对固定 SHA256，再显式准备本地识别模型。不读取教材、配置密钥或启动翻译。扫描模型的许可及归属见 [THIRD_PARTY.md](../THIRD_PARTY.md)，包括 MFD 权重的上游许可声明差异。源仓库不包含模型权重、运行所需中文字库、教材或私人任务库；测试仅附两个自绘小字体。
 
 只需测试、数字排版或先验证环境时可加 `-SkipModels`。需要解析/扫描时再执行：
 

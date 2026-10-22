@@ -29,6 +29,8 @@ __pycache__/
 *.pt
 *.ttf
 *.otf
+!tests/fixtures/original-zero-advance.ttf
+!tests/fixtures/original-tall-containers.ttf
 *.zip
 *.pdf
 *.png

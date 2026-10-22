@@ -374,6 +374,23 @@ def _review_hash(element, translated, book, glossary):
     return _review_hash_from_digest(element, digest(translated), book, glossary)
 
 
+def _review_binding(element,translated,book,glossary):
+    """Freeze scalar identities before sending a request, not after its reply."""
+    from .store import translation_rule_hash
+    return {'element_id':element.id,'source_hash':element.source_hash,
+            'rule_hash':translation_rule_hash(book,element,glossary),
+            'source_sha256':book.source_sha256,'review_hash':_review_hash(element,translated,book,glossary)}
+
+
+def _commit_review(store,element,translated,book,glossary,passed,problems,provider,*,task=None,owner=None,binding=None):
+    """Store independently verifies the current DB binding in one transaction."""
+    lease=({'task_id':task['id'],'owner':owner,'task_source_hash':task['source_hash']}
+           if task is not None else {})
+    frozen=dict(binding if binding is not None else _review_binding(element,translated,book,glossary))
+    return store.apply_semantic_review(frozen.pop('element_id'),translated,
+        passed=passed,problems=problems,provider=provider,**frozen,**lease)
+
+
 def legacy_review_hash(element, translated, book, glossary):
     """Exact V1 identity for read-only old-cache verification, never a new proof."""
     return _review_hash_from_digest(element, digest(translated), book, glossary, legacy=True)
@@ -489,7 +506,7 @@ def _new_review_report(provider, accepted, selected, pending, scheduled):
             "review_batches": 0, "review_split_batches": 0, "review_truncated_calls": 0,
             "stale_results": 0, "requests": 0, "failed_requests": 0, "usage_missing_calls": 0,
             "input_tokens": 0, "output_tokens": 0, "estimated_cost": 0.0,
-            "cost_estimate_complete": True, "cancelled": False}
+            "cost_estimate_complete": True, "cancelled": False, "provider_blocked": None}
 
 
 def review_status(book, store) -> dict:
@@ -667,8 +684,9 @@ def run_translation(book, store, config_path, provider=None, workers=4, review_p
     pending = pending if max_tasks is None else pending[:max_tasks]
     report = {"provider": None, "review_provider": None, "scheduled": len(pending),
               "task_ids": sorted(task_ids) if task_ids is not None else None,
-              "completed": 0, "failed": 0, "skipped_claimed": 0, "cancelled": False,
+              "completed": 0, "failed": 0, "skipped_claimed": 0, "cancelled": False, "provider_blocked": None,
               "interrupted_saved_elements": 0, "interrupted_save_rejected": 0,
+              "stale_review_results": 0,
               "review_selected": 0, "review_passed": 0, "review_failed": 0, "review_pending": 0,
               "review_batches": 0, "review_split_batches": 0, "review_truncated_calls": 0,
               "requests": 0, "failed_requests": 0, "usage_missing_calls": 0, "input_tokens": 0, "output_tokens": 0,
@@ -725,6 +743,13 @@ def run_translation(book, store, config_path, provider=None, workers=4, review_p
                     "completion_tokens": 0, "estimated_cost": 0.0, "currency": selected.currency})
             if error.status == 429 or error.status >= 500:
                 limiter.throttle(error.retry_after)
+            if error.status in {401, 402, 403}:
+                # Authentication, credit and access failures concern the whole
+                # provider, not a paragraph. Let in-flight work finish saving,
+                # and leave unstarted tasks available for a later resumption.
+                with counter_lock:
+                    report['provider_blocked'] = {'provider': selected.name, 'http_status': error.status}
+                stop.set()
             raise
         except Exception:
             bump(failed_requests=1, usage_missing_calls=1)
@@ -765,18 +790,20 @@ def run_translation(book, store, config_path, provider=None, workers=4, review_p
 
     def semantic_review(task, candidates, force_ids, lease_owner=None):
         chosen = [eid for eid in candidates if review_selected(element_map[eid]) or eid in force_ids]
+        bindings={eid:_review_binding(element_map[eid],candidates[eid],book,glossary) for eid in chosen}
         bump(review_selected=len(chosen))
         if not chosen:
             return set()
         def defer(ids, detail):
+            stale=set()
             for eid in ids:
-                issue("semantic_review_pending", detail, element_map[eid],
-                      translation_hash=digest(candidates[eid]),
-                      review_hash=_review_hash(element_map[eid], candidates[eid], book, glossary))
-            bump(review_pending=len(ids))
+                applied=_commit_review(store,element_map[eid],candidates[eid],book,glossary,
+                    None,[detail],reviewer.name if reviewer else None,task=task,owner=lease_owner,binding=bindings[eid])
+                if applied['applied']:bump(review_pending=1)
+                else:stale.add(eid);bump(stale_review_results=1)
+            return stale
         if reviewer is None:
-            defer(chosen, "该元素已通过结构检查，但尚未执行独立语义复核")
-            return set()
+            return defer(chosen, "该元素已通过结构检查，但尚未执行独立语义复核")
         queue = deque(_review_batches(chosen, element_map, candidates))
         rejected = set()
         while queue:
@@ -817,30 +844,23 @@ def run_translation(book, store, config_path, provider=None, workers=4, review_p
                     queue.appendleft(ids[:middle])
                     bump(review_split_batches=1)
                 else:
-                    defer(ids, "审校回复达到长度上限，单个完整元素仍未完成；保留待审状态")
+                    rejected.update(defer(ids, "审校回复达到长度上限，单个完整元素仍未完成；保留待审状态"))
                 continue
             except _Cancelled:
                 raise
             except Exception as error:
                 safe = str(error) if isinstance(error, _HTTPFailure) else type(error).__name__
-                defer(ids, "语义复核未成功完成：" + safe)
+                rejected.update(defer(ids, "语义复核未成功完成：" + safe))
                 continue
             for eid, verdict in reviews.items():
+                applied=_commit_review(store,element_map[eid],candidates[eid],book,glossary,
+                    verdict['passed'],verdict['issues'],reviewer.name,task=task,owner=lease_owner,binding=bindings[eid])
+                if not applied['applied']:
+                    rejected.add(eid);bump(stale_review_results=1);continue
                 if verdict["passed"]:
-                    if hasattr(store, "resolve_issues"):
-                        store.resolve_issues(eid, ["semantic_review_pending", "semantic_review_failed",
-                                                  "glossary_review_required", "glossary_review"])
-                    issue("semantic_review_passed", "已执行独立语义复核", element_map[eid], severity="info",
-                          review_provider=reviewer.name, translation_hash=digest(candidates[eid]),
-                          review_hash=_review_hash(element_map[eid], candidates[eid], book, glossary))
                     bump(review_passed=1)
                 else:
                     rejected.add(eid)
-                    problem = issue("semantic_review_failed", "；".join(verdict["issues"]) or "审校未通过",
-                                    element_map[eid], severity="error", review_provider=reviewer.name,
-                                    translation_hash=digest(candidates[eid]),
-                                    review_hash=_review_hash(element_map[eid], candidates[eid], book, glossary))
-                    store.put_candidate(eid, candidates[eid], "api-semantic-review", issues=[problem])
                     bump(review_failed=1)
         return rejected
 
@@ -861,7 +881,7 @@ def run_translation(book, store, config_path, provider=None, workers=4, review_p
         failed_signatures = set()
         feedback = _semantic_failure_feedback(book, store, task["element_ids"], glossary)
         required_review = set(feedback)
-        buffered_valid, buffered_review = {}, set()
+        buffered_valid, buffered_review,buffered_bindings = {}, set(),{}
 
         def preserve_interrupted():
             """Save returned structural work through the same strict lease gate.
@@ -902,10 +922,11 @@ def run_translation(book, store, config_path, provider=None, workers=4, review_p
                                       and review_record_matches(entry, element_map[eid], values[eid], book, glossary)
                                       for entry in diagnostics)}
             for eid in pending:
-                issue("semantic_review_pending", "中断前已保存结构有效译文，独立语义复核待续传", element_map[eid],
-                      translation_hash=digest(values[eid]),
-                      review_hash=_review_hash(element_map[eid], values[eid], book, glossary))
-            bump(review_pending=len(pending - already_pending))
+                applied=_commit_review(store,element_map[eid],values[eid],book,glossary,None,
+                    ["中断前已保存结构有效译文，独立语义复核待续传"],reviewer.name if reviewer else None,
+                    binding=buffered_bindings[eid])
+                if not applied['applied']:bump(stale_review_results=1)
+                elif eid not in already_pending:bump(review_pending=1)
             if saved.get("complete"):
                 bump(completed=1)
 
@@ -947,6 +968,8 @@ def run_translation(book, store, config_path, provider=None, workers=4, review_p
                         issue("glossary_term_proposal", "待协调合并的术语提议", severity="info",
                               english=english, chinese=chinese, task_id=task["id"])
                     buffered_valid = dict(valid)
+                    buffered_bindings={eid:_review_binding(element_map[eid],text,book,glossary)
+                                       for eid,text in valid.items()}
                     buffered_review = set(forced) | {eid for eid in valid if review_selected(element_map[eid])}
                     store.renew(task["id"], owner, lease_seconds=600)
                     blocked = semantic_review(task, valid, forced, lease_owner=owner)
@@ -1088,12 +1111,12 @@ def _run_review_sequential(book, store, config_path, provider, max_elements=None
         report["review_batches"] += 1
         truncated = False
         assets = sorted({aid for eid in ids for aid in TOKEN_RE.findall(elements[eid].text)})
+        bindings={eid:_review_binding(elements[eid],accepted[eid],book,glossary) for eid in ids}
         body = {"rules_version": RULES_VERSION, "glossary": glossary, "style_rules": list(STYLE_RULES),
                 "elements": [{"id": eid, "source": elements[eid].text, "translation": accepted[eid],
-                              "review_hash": _review_hash(elements[eid], accepted[eid], book, glossary)} for eid in ids],
+                              "review_hash": bindings[eid]['review_hash']} for eid in ids],
                 "protected_assets": {aid: {"text": book.assets[aid].text, "sha256": book.assets[aid].sha256}
                                      for aid in assets}}
-        expected_hashes = {entry["id"]: entry["review_hash"] for entry in body["elements"]}
         source_hash = digest(body)
         task_id = "review-" + source_hash[:24]
         packet = {"task_id": task_id, "source_hash": source_hash, "payload": body,
@@ -1163,6 +1186,9 @@ def _run_review_sequential(book, store, config_path, provider, max_elements=None
                             "estimated_cost": 0.0, "currency": selected_provider.currency,
                         })
                     last_error = str(error)
+                    if error.status in {401, 402, 403}:
+                        report['provider_blocked'] = {'provider': selected_provider.name, 'http_status': error.status}
+                        stop.set()
                     if error.status == 429 or error.status >= 500:
                         limiter.throttle(error.retry_after)
                     if not error.retryable:
@@ -1193,43 +1219,20 @@ def _run_review_sequential(book, store, config_path, provider, max_elements=None
             report["review_split_batches"] += 1
             continue
         if result is None:
-            report["review_pending"] += len(ids)
             for eid in ids:
-                store.record_issue({"code": "semantic_review_pending", "severity": "warning", "element_id": eid,
-                                    "page": elements[eid].page, "detail": "独立语义复核尚未成功完成：" + last_error,
-                                    "translation_hash": digest(accepted[eid]),
-                                    "review_hash": _review_hash(elements[eid], accepted[eid], book, glossary),
-                                    "review_hash_schema": REVIEW_HASH_SCHEMA})
+                applied=_commit_review(store,elements[eid],accepted[eid],book,glossary,None,
+                    ["独立语义复核尚未成功完成："+last_error],selected_provider.name,binding=bindings[eid])
+                report['review_pending' if applied['applied'] else 'stale_results']+=1
             continue
-        current = store.translations()
-        current_book = getattr(store, "book", None) or book
-        current_elements = current_book.element_map()
-        current_glossary = dict(getattr(store, "glossary", glossary))
         for eid, verdict in result.items():
-            try:
-                current_hash = _review_hash(current_elements[eid], current[eid], current_book, current_glossary)
-            except KeyError:
-                current_hash = None
-            if current.get(eid) != accepted[eid] or current_hash != expected_hashes[eid]:
+            applied=_commit_review(store,elements[eid],accepted[eid],book,glossary,
+                verdict['passed'],verdict['issues'],selected_provider.name,binding=bindings[eid])
+            if not applied['applied']:
                 report["stale_results"] += 1
                 continue
-            entry = {"element_id": eid, "page": elements[eid].page, "review_provider": selected_provider.name,
-                     "translation_hash": digest(accepted[eid]), "review_hash": expected_hashes[eid],
-                     "review_hash_schema": REVIEW_HASH_SCHEMA}
             if verdict["passed"]:
-                if hasattr(store, "resolve_issues"):
-                    store.resolve_issues(eid, ["semantic_review_pending", "semantic_review_failed",
-                                              "glossary_review", "glossary_review_required"])
-                store.record_issue({**entry, "code": "semantic_review_passed", "severity": "info",
-                                    "detail": "独立语义复核已通过；结论绑定当前原文、公式、译文和冻结规则"})
                 report["review_passed"] += 1
             else:
-                problem = {**entry, "code": "semantic_review_failed", "severity": "error",
-                           "detail": "；".join(verdict["issues"]) or "独立审校未通过"}
-                store.put_candidate(eid, accepted[eid], "semantic-review", issues=[problem])
-                if hasattr(store, "reject_translation"):
-                    store.reject_translation(eid, digest(accepted[eid]))
-                store.record_issue(problem)
                 report["review_failed"] += 1
     report["elapsed_seconds"] = time.perf_counter() - started
     return report
@@ -1295,6 +1298,8 @@ def run_review(book, store, config_path, provider, max_elements=None, workers=4)
                 report[key] += child[key]
             report["cost_estimate_complete"] &= child["cost_estimate_complete"]
             report["cancelled"] |= child["cancelled"]
+            if child.get('provider_blocked'):
+                report['provider_blocked'] = child['provider_blocked']
             report["worker_elapsed_seconds"] += child.get("elapsed_seconds", 0.0)
         collected.add(future)
     try:

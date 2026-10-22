@@ -152,13 +152,13 @@ def run_variant(kind, source, out, boxes, originals, fitz, api):
         group = "rule-group" if key == "definition" else "code-group" if key == "caption" else key
         if key == "definition": role.update(role="body_connective", anchor_id="rule")
         if key == "caption": role["anchor_id"] = "code"
-        elements.append(Element(key, ekind, SOURCE[key], 1, boxes[key], "1", style={"columns":1,"column":0,"heading_level":1 if key=="title" else 2}, group_id=group, metadata=role))
+        elements.append(Element(key, ekind, SOURCE[key], 1, boxes[key], None, style={"columns":1,"column":0,"heading_level":1 if key=="title" else 2}, group_id=group, metadata=role))
         if key == "definition":
-            elements.append(Element("rule", "formula", "", 1, originals["demo-rule"]["bbox"], "1", asset_ids=["demo-rule"], group_id="rule-group"))
+            elements.append(Element("rule", "formula", "", 1, originals["demo-rule"]["bbox"], None, asset_ids=["demo-rule"], group_id="rule-group"))
         if key == "code-title":
-            elements.append(Element("code", "code", "", 1, originals["demo-code"]["bbox"], "1", asset_ids=["demo-code"], group_id="code-group"))
+            elements.append(Element("code", "code", "", 1, originals["demo-code"]["bbox"], None, asset_ids=["demo-code"], group_id="code-group"))
     book = Book(str(source.resolve()), file_sha256(source), TITLE + " (original synthetic " + kind + " demo)", 1, [1],
-        pages=[{"number":1,"width":W,"height":H,"printed_page":"1","label_source":"author-specified","columns":1,
+        pages=[{"number":1,"width":W,"height":H,"printed_page":None,"label_source":"physical-fallback","columns":1,
                 "parser_backend":"direct-synthetic-authoring-contract","element_ids":[e.id for e in elements],
                 "coverage":{"basis":"synthetic-authoring-manifest; not parser/OCR coverage"}}],
         elements=elements, assets=assets,
@@ -222,5 +222,6 @@ def main():
             "elapsed_seconds":round(time.perf_counter()-start,3),"visual_review":"pending_direct_review_of_all_previews"}
     dump(generated/"demo_report.json",report)
     print(json.dumps(report,ensure_ascii=False,indent=2))
+    return 2 if any(v["qa_errors"] for v in variants) else 0
 
-if __name__=="__main__":main()
+if __name__=="__main__":raise SystemExit(main())
