@@ -24,6 +24,8 @@ from .models import (RULES_VERSION, TOKEN_RE, TRANSLATABLE, Book, digest,
                      protected_asset_descriptor, validate_translation)
 
 PROTOCOL_VERSION = 2
+TRANSLATION_PACKET_MAX_IDS = 6
+TRANSLATION_TASK_MAX_REQUESTS = 128  # Includes translation and inline review.
 TASK_ASSET_SCHEMA = "protected-assets-v2"
 REVIEW_HASH_SCHEMA = "relevant-glossary-v2"
 STYLE_RULES = (
@@ -196,6 +198,8 @@ class Provider:
     price_in: float | None = None
     price_out: float | None = None
     currency: str = "CNY"
+    thinking: str | None = None
+    reasoning_effort: str | None = None
 
 
 def _load_provider(config: dict, name: str | None) -> Provider:
@@ -211,6 +215,12 @@ def _load_provider(config: dict, name: str | None) -> Provider:
         raise ValueError("Provider requires base_url, api_key and model")
     if not value["base_url"].startswith(("https://", "http://")):
         raise ValueError("Provider base_url must use HTTP or HTTPS")
+    thinking = value.get("thinking")
+    effort = value.get("reasoning_effort")
+    if thinking is not None and thinking not in ("enabled", "disabled"):
+        raise ValueError("Provider thinking must be enabled or disabled")
+    if effort is not None and effort not in ("none", "minimal", "low", "medium", "high", "xhigh", "max", "ultra"):
+        raise ValueError("Provider reasoning_effort is unsupported")
     return Provider(
         str(chosen), value["base_url"].rstrip("/"), value["api_key"], value["model"],
         timeout=max(1.0, min(float(value.get("timeout", 180)), 240.0)),
@@ -220,6 +230,7 @@ def _load_provider(config: dict, name: str | None) -> Provider:
         price_in=float(value["price_in"]) if value.get("price_in") is not None else None,
         price_out=float(value["price_out"]) if value.get("price_out") is not None else None,
         currency=str(value.get("currency", "CNY")),
+        thinking=thinking, reasoning_effort=effort,
     )
 
 
@@ -284,8 +295,13 @@ def _chat(provider: Provider, messages: list[dict]) -> tuple[str, dict]:
     endpoint = provider.base_url
     if not endpoint.endswith("/chat/completions"):
         endpoint += "/chat/completions"
-    body = json.dumps({"model": provider.model, "messages": messages,
-                       "temperature": 0.2, "max_tokens": provider.max_tokens}, ensure_ascii=False).encode()
+    payload = {"model": provider.model, "messages": messages,
+               "temperature": 0.2, "max_tokens": provider.max_tokens}
+    if provider.thinking is not None:
+        payload["thinking"] = {"type": provider.thinking}
+    if provider.reasoning_effort is not None:
+        payload["reasoning_effort"] = provider.reasoning_effort
+    body = json.dumps(payload, ensure_ascii=False).encode()
     request = urllib.request.Request(endpoint, data=body, method="POST", headers={
         "Authorization": "Bearer " + provider.api_key, "Content-Type": "application/json",
         "User-Agent": "TextbookPDF/2",
@@ -607,6 +623,13 @@ def _request_payload(task, requested, accepted, feedback=None):
     # source identity to Store/agents; the model needs only read-only math text.
     payload.pop("protected_asset_descriptors", None)
     payload["elements"] = [e for e in payload["elements"] if e["id"] in requested]
+    frozen = task["payload"]["elements"]
+    positions = [i for i, row in enumerate(frozen) if row["id"] in requested]
+    if positions:
+        start, end = min(positions), max(positions)
+        context = lambda rows: [dict(row, readonly=True) for row in rows]
+        payload["context_before"] = context(frozen[max(0, start - 2):start]) if start else payload["context_before"]
+        payload["context_after"] = context(frozen[end + 1:end + 3]) if end + 1 < len(frozen) else payload["context_after"]
     payload["completed_context"] = [
         {"id": e["id"], "source": e["text"], "translation": accepted[e["id"]], "readonly": True}
         for e in task["payload"]["elements"] if e["id"] in accepted and e["id"] not in requested
@@ -618,6 +641,54 @@ def _request_payload(task, requested, accepted, feedback=None):
             "response_example": {"task_id": task["id"], "source_hash": task["source_hash"],
                                  "translations": {eid: "对应的中文译文" for eid in requested},
                                  "proposed_terms": {}}}
+
+
+def _translation_packets(task, requested, max_tokens):
+    """Size requests without changing the canonical task or cutting groups.
+
+    The output estimate is deliberately conservative, not a token guarantee.
+    Explicit provider truncation is handled by splitting these groups further.
+    A group exceeding the ID limit is deferred rather than silently divided.
+    """
+    wanted = set(requested)
+    rows = task["payload"]["elements"]
+    if wanted - {row["id"] for row in rows}:
+        raise ValueError("Requested packet contains a foreign source ID")
+    groups = []
+    previous = None
+    for row in rows:
+        same_group = (previous is not None and row.get("group_id")
+                      and row.get("group_id") == previous.get("group_id")
+                      and row.get("chapter") == previous.get("chapter")
+                      and row["page"] - previous["page"] in (0, 1))
+        if not same_group:
+            groups.append([])
+        if row["id"] in wanted:
+            groups[-1].append(row["id"])
+        previous = row
+    by_id = {row["id"]: row for row in rows}
+    budget = max(128, int(max_tokens) // 2 - 128)
+    packets, packet, deferred, estimate = [], [], [], 0
+    for group in groups:
+        if not group:
+            continue
+        if len(group) > TRANSLATION_PACKET_MAX_IDS:
+            deferred.append(group)
+            continue
+        group_estimate = sum(96 + 2 * len(by_id[eid]["text"]) for eid in group)
+        if packet and (sum(map(len, packet)) + len(group) > TRANSLATION_PACKET_MAX_IDS
+                       or estimate + group_estimate > budget):
+            packets.append(packet)
+            packet, estimate = [], 0
+        packet.append(group)
+        estimate += group_estimate
+    if packet:
+        packets.append(packet)
+    return packets, deferred
+
+
+class _TaskRequestLimit(ValueError):
+    """No request was issued; the bounded task must remain resumable."""
 
 
 def _current_task(task, book, glossary):
@@ -687,6 +758,9 @@ def run_translation(book, store, config_path, provider=None, workers=4, review_p
               "completed": 0, "failed": 0, "skipped_claimed": 0, "cancelled": False, "provider_blocked": None,
               "interrupted_saved_elements": 0, "interrupted_save_rejected": 0,
               "stale_review_results": 0,
+              "translation_packets": 0, "translation_split_packets": 0,
+              "translation_truncated_calls": 0, "translation_deferred_groups": 0,
+              "task_request_limit": TRANSLATION_TASK_MAX_REQUESTS,
               "review_selected": 0, "review_passed": 0, "review_failed": 0, "review_pending": 0,
               "review_batches": 0, "review_split_batches": 0, "review_truncated_calls": 0,
               "requests": 0, "failed_requests": 0, "usage_missing_calls": 0, "input_tokens": 0, "output_tokens": 0,
@@ -704,6 +778,7 @@ def run_translation(book, store, config_path, provider=None, workers=4, review_p
     providers = [translation_provider] + ([reviewer] if reviewer else [])
     limiters = {p.name: _Limiter(p.requests_per_minute, stop) for p in providers}
     element_map = book.element_map()
+    task_calls = Counter()
 
     def bump(**values):
         with counter_lock:
@@ -724,6 +799,10 @@ def run_translation(book, store, config_path, provider=None, workers=4, review_p
         limiter.acquire()
         at = time.perf_counter()
         with counter_lock:
+            if task_id is not None and task_calls[task_id] >= TRANSLATION_TASK_MAX_REQUESTS:
+                raise _TaskRequestLimit("Per-task request hard limit reached; remaining work is pending")
+            if task_id is not None:
+                task_calls[task_id] += 1
             report["requests"] += 1
             bucket = report["usage_by_provider"].setdefault(selected.name, {
                 "model": selected.model, "currency": selected.currency, "input_tokens": 0,
@@ -879,6 +958,17 @@ def run_translation(book, store, config_path, provider=None, workers=4, review_p
                 pass
         last_error, terminal = "No complete response received", False
         failed_signatures = set()
+        failures = Counter()
+        initial_accepted = store.translations()
+        packets, deferred = _translation_packets(task,
+            [eid for eid in task["element_ids"] if eid not in initial_accepted],
+            translation_provider.max_tokens)
+        packets = deque(packets)
+        for group in deferred:
+            bump(translation_deferred_groups=1)
+            issue("translation_group_exceeds_packet_limit",
+                  "完整语义组超出单次元素上限，未拆散源组或发起请求；保留待处理",
+                  task_id=task["id"], element_ids=group)
         feedback = _semantic_failure_feedback(book, store, task["element_ids"], glossary)
         required_review = set(feedback)
         buffered_valid, buffered_review,buffered_bindings = {}, set(),{}
@@ -931,13 +1021,15 @@ def run_translation(book, store, config_path, provider=None, workers=4, review_p
                 bump(completed=1)
 
         try:
-            for attempt in range(translation_provider.attempts):
+            # A successful packet does not spend another packet's retry quota.
+            # Explicit truncation splits groups; a singleton is deferred once.
+            while True:
                 if stop.is_set():
                     raise _Cancelled()
                 store.renew(task["id"], owner, lease_seconds=600)
                 accepted = store.translations()
-                requested = [eid for eid in task["element_ids"] if eid not in accepted]
-                if not requested:
+                missing = [eid for eid in task["element_ids"] if eid not in accepted]
+                if not missing:
                     result = store.submit(task["id"], owner, task["source_hash"],
                                           {eid: accepted[eid] for eid in task["element_ids"]},
                                           provider=translation_provider.name)
@@ -945,7 +1037,20 @@ def run_translation(book, store, config_path, provider=None, workers=4, review_p
                         bump(completed=1)
                         return
                     raise ValueError("Store did not complete a fully accepted task")
+                while packets:
+                    groups = [[eid for eid in group if eid not in accepted] for group in packets[0]]
+                    groups = [group for group in groups if group]
+                    if groups:
+                        packets[0] = groups
+                        break
+                    packets.popleft()
+                if not packets:
+                    break
+                requested = [eid for group in packets[0] for eid in group]
+                request_key = tuple(requested)
+                attempt = failures[request_key]
                 try:
+                    bump(translation_packets=1)
                     raw, usage = call(translation_provider, [
                         {"role": "system", "content": "你是专业英文教材译者。严格遵守任务内冻结文体与术语。只翻译 requested_element_ids，保持公式标记和全部数字。只返回 response_example 形式的JSON，task_id及source_hash原样返回。不要输出只读上下文。"},
                         {"role": "user", "content": json.dumps(_request_payload(task, requested, accepted, feedback), ensure_ascii=False)},
@@ -1015,8 +1120,31 @@ def run_translation(book, store, config_path, provider=None, workers=4, review_p
                         bump(skipped_claimed=1)
                         return
                     task = refreshed
+                    if result.get("accepted"):
+                        # Recompute remaining IDs next iteration. Complete or
+                        # partial valid progress does not consume failure quota.
+                        continue
                 except _Cancelled:
                     raise
+                except _OutputTruncated:
+                    bump(translation_truncated_calls=1)
+                    groups = packets.popleft()
+                    if len(groups) > 1:
+                        middle = len(groups) // 2
+                        packets.appendleft(groups[middle:])
+                        packets.appendleft(groups[:middle])
+                        bump(translation_split_packets=1)
+                        last_error = "Truncated request split into smaller source-group packets"
+                    else:
+                        last_error = "Single complete source unit/group truncated; left pending without repeating the request"
+                        issue("translation_indivisible_group_truncated", last_error,
+                              task_id=task["id"], element_ids=requested)
+                        bump(translation_deferred_groups=1)
+                    continue
+                except _TaskRequestLimit:
+                    last_error = "Per-task request hard limit reached; remaining work is pending"
+                    issue("translation_request_limit", last_error, task_id=task["id"])
+                    break
                 except _HTTPFailure as error:
                     last_error, terminal = str(error), not error.retryable
                 except Exception as error:
@@ -1024,7 +1152,11 @@ def run_translation(book, store, config_path, provider=None, workers=4, review_p
                     last_error = "Translation response failed validation: " + type(error).__name__
                 if terminal:
                     break
-                if attempt + 1 < translation_provider.attempts and stop.wait(min(30, 2 ** attempt + random.random())):
+                failures[request_key] += 1
+                if failures[request_key] >= translation_provider.attempts:
+                    packets.popleft()
+                    continue
+                if stop.wait(min(30, 2 ** attempt + random.random())):
                     raise _Cancelled()
             release(last_error, retryable=not terminal)
             bump(failed=1)

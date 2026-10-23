@@ -38,6 +38,8 @@ $env:TEXTBOOK_TYPST = 'D:\tools\typst.exe'
 
 将 `config.example.json` 复制为 `config.json`，在本地填写服务地址、模型和密钥。示例价格只是占位值，应改为服务商实际单价；程序记录的是估算费用，不是账单。不要提交真实配置。代理方式无需配置外部API，可按 [工作流程](WORKFLOW.md) 领取并提交结果。
 
+支持相应 Chat Completions 扩展的服务商可显式设置 `thinking`（`enabled` / `disabled`）及 `reasoning_effort`。省略两项时请求保持原样；程序不会自动关闭思考，也不保证所有服务商接受这些字段。先在自己的小样中核对质量和实际服务响应，再改变全书配置。
+
 ## 先做少量页
 
 ```powershell

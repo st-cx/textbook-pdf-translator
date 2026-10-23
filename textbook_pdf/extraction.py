@@ -637,12 +637,22 @@ def _math_spans(line, hints=()):
 def _asset(book, doc, page, outdir, kind, bbox, text="", baseline=None, metadata=None):
     bbox = fitz.Rect(bbox) & page.rect
     selected_source=set((metadata or {}).get('glyph_ids',[]))
+    native_capture=None
     if selected_source:
+        # Reading order and semantic grouping keep nominal boxes.
+        # Only a selected protected asset asks for actual native ink evidence.
+        from .native_ink_geometry import measure_selected_native_ink,capture_grid
+        immutable_identity=book.source_sha256 if re.fullmatch(r'[0-9a-f]{64}',book.source_sha256 or '') else None
+        native_capture=measure_selected_native_ink(page,getattr(book,'_active_glyphs',[]),selected_source,
+                                                  immutable_source_sha256=immutable_identity)
         # The final visible box, as well as the internal cleanup region, must
         # contain each selected native glyph's measured ink. Keeping a text
         # operator alone does not prevent a tall bracket being visually cut.
         ink=[g['bbox'] for g in getattr(book,'_active_glyphs',[]) if g['id'] in selected_source]
         if ink:bbox=(bbox|_rect_union(ink))&page.rect
+        measured=[g['native_ink_bbox'] for g in getattr(book,'_active_glyphs',[])
+                  if g['id'] in selected_source and 'native_ink_bbox' in g]
+        if measured:bbox=capture_grid(bbox|_rect_union(measured))&page.rect
     if bbox.is_empty or bbox.width <= .05 or bbox.height <= .05:
         raise ValueError(f"Empty {kind} crop on page {page.number+1}: {bbox}")
     identity=[book.source_sha256,_rounded(bbox),text]
@@ -650,6 +660,12 @@ def _asset(book, doc, page, outdir, kind, bbox, text="", baseline=None, metadata
         identity.append({'excluded_glyph_ids':sorted(metadata['exclude_glyph_ids'])})
     aid = f"p{page.number+1:04d}-{kind}-{digest(identity)[:14]}"
     if aid in book.assets:
+        if native_capture and native_capture['unverified']:
+            raise ValueError('Cannot reuse accepted asset after current native ink verification failed')
+        if native_capture and not book.assets[aid].metadata.get('native_ink_output_verification',{}).get('verified'):
+            raise ValueError('Cannot reuse existing asset without strong current target capture proof')
+        if native_capture and book.assets[aid].metadata.get('native_ink_capture_fingerprint')!=digest(native_capture):
+            raise ValueError('Cannot reuse existing asset after native capture identity changed')
         return book.assets[aid]
     # One PDF bundle per source page shares the original font/form resources
     # across all formula crops. Separate files would duplicate the full source
@@ -681,6 +697,7 @@ def _asset(book, doc, page, outdir, kind, bbox, text="", baseline=None, metadata
         # and that nominal box, so removing neighbouring prose cannot delete
         # a tall glyph whose visible ink lies below its nominal ascender box.
         selected_rects=[fitz.Rect(g['bbox']) | fitz.Rect(g.get('nominal_bbox',g['bbox']))
+                        | fitz.Rect(g.get('native_ink_bbox',g['bbox']))
                         for g in glyphs if g['id'] in selected_ids]
         # Rotated/anisotropic text has different rawdict and redaction metrics.
         # Protect the native trace envelopes as well, without substituting a
@@ -762,11 +779,20 @@ def _asset(book, doc, page, outdir, kind, bbox, text="", baseline=None, metadata
                    page.number+1,severity='error')
             book.issues[-1]['asset_id']=aid
     target.show_pdf_page(target.rect,isolated,0,clip=bbox)
+    native_output=None
+    if native_capture is not None:
+        if native_capture['unverified']:
+            native_output={'verified':False,'skipped_due_source_unverified':True}
+        else:
+            from .native_ink_geometry import verify_actual_capture
+            native_output=verify_actual_capture(page,target,glyphs,selected_ids,
+                                                source_to_target=[-bbox.x0,-bbox.y0],
+                                                expected_dimensions=[bbox.width,bbox.height])
     isolated.close()
     if isolation_issues:
         _issue(book,"formula_crop_contamination",f"Cannot safely isolate {len(isolation_issues)} overlapping unrelated glyphs in asset {aid}",page.number+1,severity="error")
     metric = float(baseline-bbox.y0) if baseline is not None else bbox.height*.8
-    asset = Asset(aid,kind,relative,page.number+1,_rounded(bbox),bbox.width,bbox.height,
+    asset = Asset(aid,kind,relative,page.number+1,list(bbox),bbox.width,bbox.height,
                   metric,text,"",
                   {**(metadata or {}),"format":"pdf","vector":True,"baseline_from_top":metric,
                    "source_sha256":book.source_sha256,"pdf_page":pdf_page,
@@ -775,8 +801,19 @@ def _asset(book, doc, page, outdir, kind, bbox, text="", baseline=None, metadata
                    "selected_glyphs_lost":selected_glyphs_lost,
                    "selected_native_identity":selected_native_proof,
                    "native_content_clipping":clipping_proof,
-                   "native_cleanup_bbox":_rounded(cleanup_bbox if selected_ids else bbox)})
+                   "native_cleanup_bbox":_rounded(cleanup_bbox if selected_ids else bbox),
+                   **({"native_ink_capture":native_capture,"native_ink_capture_fingerprint":digest(native_capture),
+                       "native_ink_output_verification":native_output}if native_capture is not None else{})})
     book.assets[aid] = asset
+    if native_capture and native_capture['unverified']:
+        _issue(book,'source_native_glyph_ink_unverified',
+               f"Cannot prove native ink geometry for {len(native_capture['unverified'])} selected glyphs in asset {aid}",
+               page.number+1,severity='error')
+        book.issues[-1].update(asset_id=aid,native_ink_failures=native_capture['unverified'])
+    if native_output and not native_output['verified']and not native_output.get('skipped_due_source_unverified'):
+        _issue(book,'source_native_ink_output_unverified',
+               f'Actual target native ink state could not be verified for asset {aid}',page.number+1,severity='error')
+        book.issues[-1].update(asset_id=aid,native_output_failures=native_output['failures'])
     return asset
 
 
@@ -2281,6 +2318,7 @@ def analyze(pdf_path, outdir, pages=None, backend="auto", *, ocr="auto", ocr_dpi
             raise ValueError(f"pages must be one-based physical pages in 1..{len(doc)}")
         book = Book(str(path),file_sha256(path),doc.metadata.get("title") or path.stem,len(doc),selected)
         parser_files=[Path(__file__),Path(__file__).with_name("babel_adapter.py"),Path(__file__).with_name("table_adapter.py"),Path(__file__).with_name("paragraph_adapter.py"),Path(__file__).with_name("math_regions.py"),Path(__file__).with_name("glyph_geometry.py"),Path(__file__).with_name("drawing_geometry.py"),Path(__file__).with_name("source_flow.py"),Path(__file__).with_name("native_clipping.py"),Path(__file__).with_name("cross_page_math.py"),Path(__file__).with_name("native_containers.py"),Path(__file__).with_name("native_operators.py")]
+        parser_files.append(Path(__file__).with_name("native_ink_geometry.py"))
         from .babel_adapter import available as babel_available, layout_model_identity
         signature=digest({"source":book.source_sha256,"selected_pages":selected,"backend":backend,"rules":RULES_VERSION,
                           "schema":book.schema_version,"babeldoc":babel_available(),

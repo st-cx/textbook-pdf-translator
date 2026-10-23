@@ -80,13 +80,38 @@ class NativeMathRegionTests(unittest.TestCase):
         self.assertEqual(len(proofs),1)
         self.assertTrue({'g1','g2'}<=set(created[0].metadata['glyph_ids']))
 
+    def test_nonembedded_base14_stays_an_explicit_source_ink_error(self):
+        directory = Path(__file__).parent / '_tmp_math_regions' / uuid.uuid4().hex
+        (directory / 'assets').mkdir(parents=True)
+        self.addCleanup(shutil.rmtree, directory)
+        with fitz.open() as document:
+            page = document.new_page(width=160, height=100)
+            page.insert_text((30, 50), 'x', fontsize=12)
+            self.assertTrue(all(not document.extract_font(row[0])[3]
+                                for row in page.get_fonts(full=True)))
+            lines, glyphs = _collect(page)
+            book = Book('synthetic.pdf', 'source', 'Base14 negative', 1, [1])
+            book._active_glyphs = glyphs
+            asset = _asset(book, document, page, directory, 'formula', lines[0]['bbox'], 'x', 50,
+                           {'glyph_ids': [g['id'] for g in glyphs]})
+            capture = asset.metadata['native_ink_capture']
+            self.assertEqual(capture['verified'], [])
+            self.assertEqual({item['reason'] for item in capture['unverified']},
+                             {'original_embedded_font_program_unavailable'})
+            errors = [issue for issue in book.issues if issue['severity'] == 'error']
+            self.assertTrue(any(issue['code'] == 'source_native_glyph_ink_unverified'
+                                and issue['asset_id'] == asset.id for issue in errors), errors)
+            self.assertFalse(asset.metadata['native_ink_output_verification']['verified'])
+            _finalize_assets(book, 1, directory)
+
     def test_missing_selected_native_glyph_is_blocking_even_if_asset_pdf_is_generated(self):
         directory = Path(__file__).parent / '_tmp_math_regions' / uuid.uuid4().hex
         (directory / 'assets').mkdir(parents=True)
         self.addCleanup(shutil.rmtree, directory)
         with fitz.open() as document:
             page = document.new_page(width=160, height=100)
-            page.insert_text((30, 50), 'x+1', fontsize=12)
+            page.insert_font(fontname='fixture-sans',fontbuffer=fitz.Font('helv').buffer)
+            page.insert_text((30, 50), 'x+1', fontsize=12,fontname='fixture-sans')
             lines, glyphs = _collect(page)
             book = Book('synthetic.pdf', 'source', 'Fixture', 1, [1])
             book._active_glyphs = glyphs
@@ -110,8 +135,9 @@ class NativeMathRegionTests(unittest.TestCase):
         self.addCleanup(shutil.rmtree, directory)
         with fitz.open() as document:
             page = document.new_page(width=240, height=180)
-            page.insert_text((70, 60), '(x', fontsize=12, fontname='tiit')
-            page.insert_text((81, 60), ')', fontsize=12, fontname='tiit')
+            page.insert_font(fontname='fixture-italic',fontbuffer=fitz.Font('tiit').buffer)
+            page.insert_text((70, 60), '(x', fontsize=12, fontname='fixture-italic')
+            page.insert_text((81, 60), ')', fontsize=12, fontname='fixture-italic')
             _, glyphs = _collect(page)
             chosen = [g for g in glyphs if g['c'] != ')']
             book = Book('synthetic.pdf', 'synthetic-source', 'Synthetic', 1, [1])
@@ -145,8 +171,10 @@ class NativeMathRegionTests(unittest.TestCase):
         document = fitz.open()
         self.addCleanup(document.close)
         page = document.new_page(width=240, height=180)
-        page.insert_text((70, 60), '(x + 1)', fontsize=12, fontname='tiit')
-        page.insert_text((82, 84), '2', fontsize=12)
+        page.insert_font(fontname='fixture-italic',fontbuffer=fitz.Font('tiit').buffer)
+        page.insert_font(fontname='fixture-sans',fontbuffer=fitz.Font('helv').buffer)
+        page.insert_text((70, 60), '(x + 1)', fontsize=12, fontname='fixture-italic')
+        page.insert_text((82, 84), '2', fontsize=12,fontname='fixture-sans')
         page.draw_line((69, 66), (110, 66))
         lines, glyphs = _collect(page)
         numerator = next(line for line in lines if 'x' in line['text'])

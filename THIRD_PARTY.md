@@ -9,7 +9,7 @@
 
 The original local translation engine is retained as `legacy_translate_pdf.py` for compatibility. Windows fonts are resolved from the local operating system and are not redistributed in the upgrade package.
 
-`tests/fixtures/original-zero-advance.ttf` (1,324 bytes) and `original-tall-containers.ttf` (944 bytes) are self-authored test fixtures with geometric outlines and matching source generators. They reproduce zero-advance math marks and tall mathematical containers. Neither is a system, textbook, or production Chinese font. The fixtures and generators use this repository's license.
+Four self-authored geometric test fonts and their generators are included: `tests/fixtures/original-zero-advance.ttf` (1,324 bytes), `original-tall-containers.ttf` (944 bytes), `original-ordinary-ink.ttf` (1,252 bytes), and `original-ordinary-ink-distinct.ttf` (1,256 bytes). They reproduce zero-advance math marks, tall mathematical containers, and ordinary glyphs with overhanging ink or distinct same-name font programs. None is a system, textbook, or production Chinese font. The fixtures and generators use this repository's license.
 
 Regenerating these fixtures optionally uses fontTools 4.60.2 (MIT); normal installation and tests do not install fontTools or depend on it at runtime.
 

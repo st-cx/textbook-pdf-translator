@@ -28,15 +28,16 @@ class NativeContainerTests(unittest.TestCase):
         path=self.root/'source.pdf'
         d=fitz.open();p=d.new_page(width=300,height=200)
         p.insert_font(fontname='own',fontfile=str(self.root/'own.ttf'))
-        p.insert_text((50,35),'A complete matrix follows.',fontsize=10)
-        p.insert_text((69,64),'A =',fontsize=10)
+        p.insert_font(fontname='fixture-sans',fontbuffer=fitz.Font('helv').buffer)
+        p.insert_text((50,35),'A complete matrix follows.',fontsize=10,fontname='fixture-sans')
+        p.insert_text((69,64),'A =',fontsize=10,fontname='fixture-sans')
         p.insert_text((90,60),'[',fontname='own',fontsize=10)
         p.insert_text((130,60),']',fontname='own',fontsize=10)
-        if language_inside:p.insert_text((97,58),'cat',fontsize=10)
+        if language_inside:p.insert_text((97,58),'cat',fontsize=10,fontname='fixture-sans')
         else:
             for y,values in [(58,'101'),(70,'010')]:
-                for x,c in zip([97,109,121],values):p.insert_text((x,y),c,fontsize=10)
-        p.insert_text((50,115),'The next sentence remains prose.',fontsize=10)
+                for x,c in zip([97,109,121],values):p.insert_text((x,y),c,fontsize=10,fontname='fixture-sans')
+        p.insert_text((50,115),'The next sentence remains prose.',fontsize=10,fontname='fixture-sans')
         d.save(path);d.close();return path
 
     def test_actual_native_matrix_has_one_complete_object_and_no_duplicate_cells(self):

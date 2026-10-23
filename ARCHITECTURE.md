@@ -35,3 +35,13 @@ Scan composition is a separate `scan_layout.compose` wrapper around `layout.comp
 Native source guards use current glyph identities and immutable crop evidence. `native_clipping.py` preserves original PDF operators, including verified zero-advance combining glyphs; `native_containers.py` protects tall delimiters with their matrix cells; `native_operators.py` detects proven limits split between current formula tokens. These checks establish their specific evidence only. Empty diagnostics never certify whole-book mathematical completeness. Source audit bindings include the current contract, actual asset files and coverage ledgers.
 
 Semantic review freezes scalar identities before the request. `Store.apply_semantic_review` rechecks source, asset, rule, text and review identities inside the write transaction. Nested candidate writes use savepoints and leave the caller's commit boundary intact.
+
+## Native ink capture and bounded requests (rc.4)
+
+`native_ink_geometry.py` measures selected glyphs using the original embedded font program, native glyph ID and complete effective 2×2 text matrix. Structural boxes remain unchanged; a separate outward 1/8pt capture envelope encloses measured ink. The saved target is checked against the original font, glyph, matrix, origin, size, color and rendering state. Missing embedded fonts, ambiguous identity and unsupported page rotation produce source issues. A measured capture envelope does not certify formula grouping, operator relationships or source coverage.
+
+Immutable sources bind the whole original PDF hash and stat identity. Mutable in-memory documents use a transitive page/Form/font resource signature; page-content hashes alone cannot detect a changed nested resource. Asset identity changes invalidate cached measurements. Actual target verification does not reuse a stale page index.
+
+Translation requests contain at most six complete element IDs, preserving contiguous source groups and the full canonical task identity. Neighbouring source units are read-only context. Explicit truncation splits groups where possible; a truncated singleton or oversized indivisible group remains pending. A task has a hard limit of 128 requests including inline review. Successful partial packets do not spend another packet's retry budget. Store versions, leases and semantic result bindings continue to govern every write.
+
+Provider `thinking` and `reasoning_effort` are opt-in request fields. Omission preserves the prior request body. A provider may reject unsupported explicit options. No inference mode is enabled globally by this release, and a small latency probe does not establish full-book quality, cost or speed.

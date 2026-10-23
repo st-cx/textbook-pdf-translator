@@ -31,6 +31,8 @@ __pycache__/
 *.otf
 !tests/fixtures/original-zero-advance.ttf
 !tests/fixtures/original-tall-containers.ttf
+!tests/fixtures/original-ordinary-ink.ttf
+!tests/fixtures/original-ordinary-ink-distinct.ttf
 *.zip
 *.pdf
 *.png

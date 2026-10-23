@@ -241,7 +241,7 @@ class PipelineTests(unittest.TestCase):
                 def api(provider, messages):
                     packet = self.packet(messages)
                     if "requested_element_ids" in packet:
-                        return self.envelope(packet, values), {"prompt_tokens": 100, "completion_tokens": 20}
+                        return self.envelope(packet, {eid: values[eid] for eid in packet["requested_element_ids"]}), {"prompt_tokens": 100, "completion_tokens": 20}
                     entries = packet.get("elements", packet.get("payload", {}).get("elements", []))
                     packets.append(entries)
                     return self.review_envelope(packet), {"prompt_tokens": 100, "completion_tokens": 20}
@@ -1282,7 +1282,7 @@ class PipelineTests(unittest.TestCase):
             packet = self.packet(messages)
             calls.append(packet)
             if "requested_element_ids" in packet:
-                raw = self.envelope(packet, {e.id: "证明一个语句。" for e in elements})
+                raw = self.envelope(packet, {eid: "证明一个语句。" for eid in packet["requested_element_ids"]})
             else:
                 data = json.loads(self.review_envelope(packet))
                 data["reviews"]["e0"] = {"passed": False, "issues": ["漏译否定。"]}
@@ -1291,11 +1291,15 @@ class PipelineTests(unittest.TestCase):
         with patch.object(translation._Limiter, "acquire", acquire), patch.object(translation, "_chat", side_effect=api):
             result = translation.run_translation(book, store, self.config, workers=1, review_provider="deepseek")
         self.assertEqual(len(calls), 2)
-        self.assertEqual(result["interrupted_saved_elements"], 7)
+        # The first bounded packet was already submitted after its review;
+        # cancellation occurs before any second translation packet is sent.
+        self.assertEqual(result["interrupted_saved_elements"], 0)
         self.assertNotIn("e0", store.translations())
+        self.assertNotIn("e6", store.translations())
+        self.assertNotIn("e7", store.translations())
         status = translation.review_status(book, store)
-        self.assertEqual((status["passed"], status["pending"], status["failed"]), (5, 2, 1))
-        self.assertEqual(store.status()["tasks"], {"partial": 1})
+        self.assertEqual((status["passed"], status["pending"], status["failed"]), (5, 0, 1))
+        self.assertEqual(store.status()["tasks"], {"pending": 1})
 
     def test_cancelled_save_rejects_changed_protected_source(self):
         book = self.book()

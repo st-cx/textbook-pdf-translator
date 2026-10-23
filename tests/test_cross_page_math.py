@@ -24,7 +24,9 @@ class CrossPageMathTests(unittest.TestCase):
         with fitz.open() as doc:
             for n, text, y in ((1, '(x +', 250), (2, 'y)', 50)):
                 page = doc.new_page(width=260, height=300)
-                page.insert_text((40, y), text, fontsize=12)
+                # Synthetic source owns embedded bytes; production has no Base14 fallback.
+                page.insert_font(fontname='fixture-sans',fontbuffer=fitz.Font('helv').buffer)
+                page.insert_text((40, y), text, fontsize=12,fontname='fixture-sans')
                 lines, glyphs = _collect(page)
                 book._active_glyphs = glyphs
                 asset = _asset(book, doc, page, out, 'formula', lines[0]['bbox'], text, y,

@@ -5,6 +5,12 @@
 核查日期：2026-10-21。使用 GitHub 官方 API/gh 读取官方 README 和源码；以下链接固定到核查时默认分支的具体提交。**本工具不是 OCR、公式保护、术语表、翻译缓存或并发翻译的首创项目。** 这些已有成熟实现，公开介绍应明确复用关系。
 
 
+## rc.4 新增的可核实现
+
+[原生笔画模块](../textbook_pdf/native_ink_geometry.py)把结构框和实际捕获范围分开，以嵌入字体程序、原生glyph-id及完整二维矩阵测量墨迹，并在保存后检查实际目标对象；可变PDF还绑定递归Form/字体资源以防旧缓存。它解决名义字框存在而斜体尾笔仍被裁掉的具体问题，没有训练新模型，也不认证完整数学结构。
+
+[翻译器](../textbook_pdf/translation.py)保持完整源语义组和原任务身份，采用最多六个元素的有界请求、截断拆包、部分有效回复保存和单任务请求上限。公开回归与内部当前源修复范围见[验证记录](VALIDATION.md)。这些实现未经过同条件竞品对测，不据此推断其他项目缺少类似机制。
+
 ## 五项差异化取舍
 
 这些是面向教材阅读的工程选择，不是行业首创声明：
@@ -94,7 +100,7 @@
 | [textbook_pdf/layout.py](../textbook_pdf/layout.py) | `8cfe6bf20152fc01e2343f18da6e240328c06d9765229b4728912d55f0a62854` |
 | [textbook_pdf/templates/book.typ](../textbook_pdf/templates/book.typ) | `81bd5b1b2cb7cb6e2879618170d772e99776816c3cb60468c028fe27904b445e` |
 | [textbook_pdf/store.py](../textbook_pdf/store.py) | `a04b81800205a903e546a304baa00ab7881b0bbb536e10d331d8c4265313fd85` |
-| [textbook_pdf/translation.py](../textbook_pdf/translation.py) | `37d5318c55232a75ddb9a5916ac4f5f4440bd7f3479df1c10e90c709ecf88c78` |
+| [textbook_pdf/translation.py](../textbook_pdf/translation.py) | `c9c55f54f76be568f47ad0ba1aea0936c88ea07220015190ef03da87896d0b5e` |
 | [textbook_pdf/scan_adapter.py](../textbook_pdf/scan_adapter.py) | `59dd267550f498d4a99d334858a5bc3ba26df3e5c78ab7d5656fe896bca94863` |
 | [textbook_pdf/qa.py](../textbook_pdf/qa.py) | `e7dc501309bcd8cc3b13f43edf3aa59e47e824da570a83391b8cae5fe088c592` |
 

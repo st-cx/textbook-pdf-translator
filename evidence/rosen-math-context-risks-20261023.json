@@ -1,0 +1,38 @@
+{
+  "schema": "sanitized-reported-math-context-and-attribution-risks-v1",
+  "recorded_on": "2026-10-23",
+  "registered_source_at_publication": "source-v55",
+  "source_book_sha256": "24630e8b80d3adce76af51dd14c0c9e19869bf92bc955b93a1d8da0d3d119850",
+  "readonly_math_context": {
+    "reported_snapshot": "source-v54",
+    "affected_assets": 12,
+    "affected_owners": 6,
+    "status_at_source55": "Native image preserved; known radical/relation glyph-flow text order still requires a certified context correction.",
+    "separate_known_complement_case": "One registered complement-stroke restoration does not yet encode the stroke in its readonly glyph-flow text."
+  },
+  "cross_owner_operator_screen": {
+    "snapshot": "source-v55",
+    "geometric_candidates": 24,
+    "candidate_pages": 7,
+    "additional_ambiguous_nearest_operator_records": 10,
+    "known_source_viewed_incorrect_owner_examples": 2,
+    "status": "Read-only candidates, not 24 confirmed mathematical defects or completed owner repairs."
+  },
+  "historical_horizontal_rule_refinement": {
+    "snapshot": "source-v54",
+    "coarse_rules": 732,
+    "actual_source_core_outside_old_crop": 402,
+    "negative": 287,
+    "unverifiable": 43,
+    "status": "Only source stroke/crop evidence; mathematical attribution pending. One source55 repair does not turn this historical screen into a current remaining-defect count."
+  },
+  "additional_api_exclusion": "Task bodies, readonly adjacent context and protected-asset pages in the known risk scope are excluded from the next explicitly selected model batch.",
+  "included_in_formal_source_issue_count": false,
+  "evidence_sha256": [
+    "1a2aa903ee21f024ae4ae30e48f690acf083d32c6674fccc3383b47b5085a951",
+    "5bd5913df44443dbd85189e48b87a3ae089813ebd3894bbf70e0b929239e7d63",
+    "7b7b29f2d574f9cd1a7d28d916ea38c8d59cb84644617c2786ad1b420b87b999"
+  ],
+  "text_images_objects_and_private_paths_published": false,
+  "all_formulas_or_whole_book_accepted": false
+}

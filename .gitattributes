@@ -4,7 +4,8 @@
 textbook_pdf/** -text whitespace=cr-at-eol,-blank-at-eof
 # The published demo receipt also binds this generator's exact bytes.
 examples/original-demo/build_demo.py -text whitespace=cr-at-eol,-blank-at-eof
-tests/** text=auto eol=lf
+# Regression receipts bind the exact test/fixture bytes too.
+tests/** -text whitespace=cr-at-eol,-blank-at-eof
 tests/fixtures/*.ttf binary
 *.pdf binary
 *.png binary
