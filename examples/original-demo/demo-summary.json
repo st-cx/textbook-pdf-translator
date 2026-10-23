@@ -7,11 +7,11 @@
   "inputs": [
     {
       "path": "generated/original-counting-en.pdf",
-      "sha256": "08bf37b96654d5de6399ae00b929c104f899e28c49c5c7cffc25788335ea0b7f"
+      "sha256": "2c061a59560901b058c5328a467bc3fb1a7334b2392594574a83af2e4023ce67"
     },
     {
       "path": "generated/original-counting-image-only.pdf",
-      "sha256": "48ff1f89b6aad4a94589a87c535611ea897ee38041597adea7a5b76418bbd70d"
+      "sha256": "e52ac2734f6a98e1fbcae7d5419c9716fb3e62ad863f1d29724822f9844337a9"
     }
   ],
   "source_preview": {
@@ -28,14 +28,14 @@
   "native_source_text_characters": 1122,
   "raster_source_text_characters": 0,
   "raster_source_outline_entries": 0,
-  "actual_build_seconds": 2.616,
+  "actual_build_seconds": 2.771,
   "variants": [
     {
       "variant": "native",
       "source_pdf": "generated/original-counting-en.pdf",
-      "source_sha256": "08bf37b96654d5de6399ae00b929c104f899e28c49c5c7cffc25788335ea0b7f",
+      "source_sha256": "2c061a59560901b058c5328a467bc3fb1a7334b2392594574a83af2e4023ce67",
       "output_pdf": "generated/native/counting-native-zh.pdf",
-      "output_sha256": "7515fc34f7701c9c6881aecc39025c31adeee369205dfb9f8453512fbbef74a7",
+      "output_sha256": "69bd7d3494a5b827d2533258edfe79365a3ac54bfc58eedd8b904dc009445676",
       "output_pages": 1,
       "source_elements": 11,
       "accepted_authored_translations": 9,
@@ -69,9 +69,9 @@
     {
       "variant": "raster",
       "source_pdf": "generated/original-counting-image-only.pdf",
-      "source_sha256": "48ff1f89b6aad4a94589a87c535611ea897ee38041597adea7a5b76418bbd70d",
+      "source_sha256": "e52ac2734f6a98e1fbcae7d5419c9716fb3e62ad863f1d29724822f9844337a9",
       "output_pdf": "generated/raster/counting-raster-zh.pdf",
-      "output_sha256": "216f89e4f6d46a407997b913ce21bcaddb6e29d05706dd164fddf8e39dfe1584",
+      "output_sha256": "acbb857a28348177cdc6e559dcaad6d88d0f9a85be4ba0f71cb5b92fef1c36a6",
       "output_pages": 1,
       "source_elements": 11,
       "accepted_authored_translations": 9,
@@ -108,5 +108,6 @@
     "生成成功、像素通过和本小样本目视检查不代表大型教材、真实扫描噪声或多章一致性已经验收。",
     "重建后的PDF哈希可能变化，必须重新检查；本记录只绑定列出的当前文件。"
   ],
-  "version": "2.0.0rc3"
+  "version": "2.0.0rc4",
+  "renderer_sha256": "160a4ae95fe77f3eebd088cb0ebd3591b7af0e7d8848321d655b145a83c42213"
 }

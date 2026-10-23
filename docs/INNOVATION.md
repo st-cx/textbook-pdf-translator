@@ -97,7 +97,7 @@
 
 | 模块 | SHA256 |
 |---|---|
-| [textbook_pdf/layout.py](../textbook_pdf/layout.py) | `8cfe6bf20152fc01e2343f18da6e240328c06d9765229b4728912d55f0a62854` |
+| [textbook_pdf/layout.py](../textbook_pdf/layout.py) | `160a4ae95fe77f3eebd088cb0ebd3591b7af0e7d8848321d655b145a83c42213` |
 | [textbook_pdf/templates/book.typ](../textbook_pdf/templates/book.typ) | `81bd5b1b2cb7cb6e2879618170d772e99776816c3cb60468c028fe27904b445e` |
 | [textbook_pdf/store.py](../textbook_pdf/store.py) | `a04b81800205a903e546a304baa00ab7881b0bbb536e10d331d8c4265313fd85` |
 | [textbook_pdf/translation.py](../textbook_pdf/translation.py) | `c9c55f54f76be568f47ad0ba1aea0936c88ea07220015190ef03da87896d0b5e` |

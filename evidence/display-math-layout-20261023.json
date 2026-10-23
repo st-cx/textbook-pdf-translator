@@ -1,0 +1,42 @@
+{
+  "recorded_on": "2026-10-23",
+  "scope": "Opt-in display composition and a private single-answer layout probe; not full-book acceptance",
+  "runtime_sha256": "160a4ae95fe77f3eebd088cb0ebd3591b7af0e7d8848321d655b145a83c42213",
+  "template_sha256": "81bd5b1b2cb7cb6e2879618170d772e99776816c3cb60468c028fe27904b445e",
+  "public_regressions": {
+    "receipt": "source-regressions-20261023-display.json",
+    "tests": 485,
+    "passed": 468,
+    "optional_skips": 17,
+    "failed": 0,
+    "errors": 0
+  },
+  "new_display_tests": 7,
+  "self_authored_only_public_test_content": true,
+  "private_single_answer_probe": {
+    "original_physical_page": 1029,
+    "original_printed_page": "S-40",
+    "output_pages": 1,
+    "independently_original_native_verified_new_formula_units": 2,
+    "composed_asset_occurrences_checked": 7,
+    "composed_asset_occurrences_passed": 7,
+    "other_five_assets_gain_no_original_ink_certification": true,
+    "qa_errors": 0,
+    "qa_warnings": 1,
+    "partial_preview_warning_retained": true,
+    "direct_visual_review": true,
+    "font_reduction": false,
+    "native_and_layout_only_source_revisions_separated": true,
+    "private_content_published": false,
+    "production_translation_or_semantic_pass_copies": 0
+  },
+  "defaults": "Unmarked content keeps the existing layout path; explicit formula identities are required.",
+  "limitations": [
+    "Pure-math exercises without leading prose are explicitly rejected in this opt-in path.",
+    "Objects exceeding available width remain blocking; no automatic shrinking.",
+    "Only short parenthetic annotations up to 64 characters receive the explicit sticky links.",
+    "No automatic display selection or full-book visual acceptance is claimed."
+  ],
+  "full_book_accepted": false,
+  "external_api_calls_by_this_layout_validation": 0
+}

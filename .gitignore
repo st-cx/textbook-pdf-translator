@@ -42,7 +42,6 @@ examples/original-demo/generated/**
 !examples/original-demo/generated/original-counting-en.pdf
 !examples/original-demo/generated/original-counting-image-only.pdf
 !examples/original-demo/generated/source-preview.png
-!examples/original-demo/generated/demo_report.json
 !examples/original-demo/generated/manual_review.json
 !examples/original-demo/generated/native/
 !examples/original-demo/generated/raster/

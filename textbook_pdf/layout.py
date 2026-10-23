@@ -599,7 +599,50 @@ def _asset_markup(asset_id, element_id, book, paths, width, issues, inline=True)
            "pdf-page: " + str(image_page))) + ")"
 
 
+def _display_text_markup(text, element, book, paths, width, issues):
+    """Explicit layout-only displays; source text/token/asset identity is unchanged."""
+    selected = element.metadata['display_asset_ids']
+    if (not isinstance(selected, list) or not selected or
+            any(not isinstance(aid, str) for aid in selected) or len(set(selected)) != len(selected)):
+        raise CompositionError('display_asset_ids must be a nonempty list of distinct protected asset ids')
+    counts = Counter(TOKEN_RE.findall(text))
+    for aid in selected:
+        asset = book.assets.get(aid)
+        if (aid not in element.asset_ids or counts[aid] != 1 or asset is None or
+                asset.kind not in {'formula', 'equation'} or asset.metadata.get('cross_page_math')):
+            raise CompositionError('A display asset must occur exactly once as one complete protected formula: ' + aid)
+    inline_element = replace(element, metadata={k:v for k,v in element.metadata.items() if k != 'display_asset_ids'})
+    matches = [m for m in TOKEN_RE.finditer(text) if m[1] in selected]
+    if element.kind == 'exercise' and not text[:matches[0].start()].strip():
+        raise CompositionError('An opt-in display exercise needs leading prose for its first-line number baseline')
+    parts = []; position = 0
+    for index, match in enumerate(matches):
+        prefix = text[position:match.start()]
+        if prefix.strip():
+            probe = ('#baseline-probe("exercise-baseline", ' + _q(element.id) + ')'
+                     if index == 0 and element.kind == 'exercise' and
+                     re.match(r'^(\s*(?:\d+[.)]|\([a-zA-Z0-9]+\)|[a-zA-Z][.)]))\s*', element.text) else '')
+            parts.append('#block(above: 0pt, below: 2pt, sticky: true)[' +
+                         probe + _text_markup(prefix, inline_element, book, paths, width, issues) + ']')
+        tail = text[match.end():] if index == len(matches)-1 else ''
+        terminal = tail.strip() if re.fullmatch(r'\s*[。；，、：！？,.!?;:]\s*', tail) else ''
+        body = _asset_markup(match[1], element.id, book, paths, width, issues, inline=False)
+        if terminal:
+            body += '#text(' + _q(terminal) + ')'
+        following = text[match.end():matches[index+1].start()].strip() if index+1 < len(matches) else ''
+        annotation = bool(len(following) <= 64 and re.fullmatch(r'[（(].+[)）]', following, flags=re.DOTALL))
+        parts.append('#block(above: 2pt, below: 3pt, breakable: false, sticky: ' +
+                     str(annotation).lower() + ')[' + body + ']')
+        position = len(text) if terminal else match.end()
+    if position < len(text):
+        parts.append('#block(above: 0pt, below: 0pt)[' +
+                     _text_markup(text[position:], inline_element, book, paths, width, issues) + ']')
+    return '#block(above: 0pt, below: 0pt)[#set par(justify: false, hanging-indent: 0pt)\n' + ''.join(parts) + ']'
+
+
 def _text_markup(text, element, book, paths, width, issues):
+    if element.metadata.get('display_asset_ids'):
+        return _display_text_markup(text, element, book, paths, width, issues)
     parts = []
     position = 0
     matches = list(TOKEN_RE.finditer(text))
@@ -873,7 +916,8 @@ def _element_markup(element, text, book, paths, geometry, width, profile, issues
             # independently generated inline text/asset fragments reliably.
             offset = "settings.number_offsets.at(" + _q(element.id) + ", default: 0) * 1pt"
             number_probe = "#baseline-probe(\"number-baseline\", " + _q(element.id) + ")"
-            body_probe = "#baseline-probe(\"exercise-baseline\", " + _q(element.id) + ")"
+            body_probe = ("" if element.metadata.get('display_asset_ids') else
+                          "#baseline-probe(\"exercise-baseline\", " + _q(element.id) + ")")
             body = "#grid(columns: (" + _number(label_width) + "pt, 1fr), column-gutter: 0pt, " + \
                    "[#pad(top: " + offset + ")[" + marker_markup + number_probe + "#text(weight: \"bold\", " + _q(label) + ")]], [" + \
                    body_probe + _text_markup(text[number.end():], element, book, paths, width - label_width, issues) + "])"
