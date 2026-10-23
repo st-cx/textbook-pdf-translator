@@ -1,34 +1,34 @@
 {
   "recorded_on": "2026-10-23",
-  "recorded_at_utc": "2026-10-23T10:39:05.320430+00:00",
+  "recorded_at_utc": "2026-10-23T11:37:34.600515+00:00",
   "version": "2.0.0rc4",
-  "source_snapshot": "source-v59",
-  "registered_source_snapshot": "source-v59",
-  "source_book_sha256": "92c494a08e0f146e02f6b8127a0b45dbde1338126ff3cce99930831a2989c4fc",
+  "source_snapshot": "source-v60",
+  "registered_source_snapshot": "source-v60",
+  "source_book_sha256": "7932691dd2bc0c524d6c00152a507b9a00541e86fdb52654cfbbde8075efaf58",
   "source_pdf_sha256": "cdf36691e43fef9c7f7140daea5e99c0f65d3af772136c64e9bd31a8a5b1d65c",
   "scope": "Internal Rosen source audit and current task state; no full-book translated PDF acceptance or competitor ranking.",
   "source_physical_pages": 1118,
-  "source_elements": 42932,
-  "source_assets_including_archived": 70826,
-  "required_translations": 28647,
-  "current_contract_accepted_translations": 11029,
-  "current_accepted_rows_including_preserved_elements": 11864,
-  "historical_accepted_rows": 14012,
+  "source_elements": 42934,
+  "source_assets_including_archived": 71094,
+  "required_translations": 28649,
+  "current_contract_accepted_translations": 11236,
+  "current_accepted_rows_including_preserved_elements": 12071,
+  "historical_accepted_rows": 14212,
   "semantic_review_current_contract": {
-    "required": 28647,
-    "accepted": 11029,
-    "selected": 21365,
-    "passed": 1616,
-    "pending": 5428,
-    "failed": 4,
-    "awaiting_translation": 14317,
-    "unbound_failure_diagnostics": 2,
+    "required": 28649,
+    "accepted": 11236,
+    "selected": 21359,
+    "passed": 1870,
+    "pending": 5325,
+    "failed": 3,
+    "awaiting_translation": 14161,
+    "unbound_failure_diagnostics": 3,
     "coverage_complete": false,
     "counts_are_current_hash_bound": true,
     "semantic_units": {
       "counts": {
-        "pending": 2,
-        "passed": 0,
+        "pending": 0,
+        "passed": 2,
         "failed": 0,
         "awaiting_translation": 0,
         "unverifiable": 0
@@ -36,9 +36,9 @@
       "units": [
         {
           "unit_id": "rosen-body-0908-0909-formal-language",
-          "state": "pending",
+          "state": "passed",
           "current": true,
-          "unit_review_hash": "3921df4ec516ca72d1a40eb19183f670035068a3b2ff85e4414be6d8d3eb7310",
+          "unit_review_hash": "00e311fbfdf5c98599d9e987d962ff9a14b66d691816843ca251260991f79795",
           "member_ids": [
             "p0908-e-f32f721d17de47",
             "p0909-e-0c16d28158700b"
@@ -47,9 +47,9 @@
         },
         {
           "unit_id": "rosen-body-0979-0980-while-condition",
-          "state": "pending",
+          "state": "passed",
           "current": true,
-          "unit_review_hash": "552e8e481261114396077b076bd4627c3916a4ad456382e9e87c3bb06c33e583",
+          "unit_review_hash": "bde6441ac443f78d473bf4e34b7ebe25ecdc30a171267538b931332511f273db",
           "member_ids": [
             "p0979-e-c2f219ee908c8f",
             "p0980-e-6a39333e0bd404"
@@ -60,8 +60,8 @@
     },
     "individual_semantic_passes_synthesized": 0
   },
-  "source_blocking_issues": 2704,
-  "source_blocking_pages": 586,
+  "source_blocking_issues": 2453,
+  "source_blocking_pages": 573,
   "source_blocking_codes": {
     "formula_boundary_review": 467,
     "formula_atomic_boundary_review": 353,
@@ -69,12 +69,14 @@
     "source_word_fragment_unresolved": 1,
     "formula_crop_contamination": 11,
     "source_native_ink_geometry_risk": 1183,
-    "source_native_ink_geometry_unverified": 536,
+    "source_native_ink_geometry_unverified": 294,
     "source_legacy_asset_alias_unverified": 4,
     "source_unprotected_math_subscripts": 1,
     "source_readonly_math_incomplete_fragment": 1,
-    "source_unprotected_numeric_power_review": 129,
-    "source_translatable_prose_inside_protected_math_asset": 3
+    "source_unprotected_numeric_power_review": 116,
+    "source_translatable_prose_inside_protected_math_asset": 3,
+    "source_unprotected_math_range_scope": 1,
+    "source_page_element_index_mismatch": 3
   },
   "source_warning_codes": {
     "table_grid_manual_review": 69,
@@ -84,15 +86,15 @@
     "neural_structure_hints_rejected": 392
   },
   "native_glyph_presence": {
-    "eligible_assets": 52545,
-    "checked_assets": 52545,
-    "passed_assets": 52545,
+    "eligible_assets": 52558,
+    "checked_assets": 52558,
+    "passed_assets": 52558,
     "missing_glyph_assets": 0,
     "unverifiable_assets": 0,
-    "selected_source_glyphs": 278583,
+    "selected_source_glyphs": 278633,
     "extra_extracted_glyphs_not_certified": 668
   },
-  "native_audit_sha256": "c0be9d1e0201cc5e4bbee273357decbd41525919b22aeea9dfebb0efe0a208ae",
+  "native_audit_sha256": "cb698cc0b268d2303c63ea82d420ded24e10689ceb5e950959e4b51bdc40346d",
   "source_page_labels": {
     "checked_pages": 1118,
     "printed_labels_supported": 1100,
@@ -202,7 +204,7 @@
     "registered_source_affected_pages": [],
     "all_formula_relations_certified": false,
     "limitation": "Only current identity-verified native objects sharing one source flow are eligible; page traversal or zero findings do not certify every formula.",
-    "report_sha256": "5c1297bc8ed493be7c225faab9c904a91d6e392bf6c63f3ea7e69bacf45b43cb",
+    "report_sha256": "9a2618167c755d7783e4e31d783015ccf5b707e32c0113aede935a807b454f15",
     "source_pages_scanned": 1118,
     "report_blocking_issues": 0,
     "report_affected_pages": [],
@@ -225,7 +227,7 @@
     "hosted_ci": false
   },
   "external_provider": {
-    "book_model_requests_this_resume": 1364,
+    "book_model_requests_this_resume": 1543,
     "book_request_count_basis": "usage-row delta from frozen pre-resume snapshot",
     "compatibility_probe_requests": 2,
     "compatibility_probe_material": "self-authored semantic sanity cases; no book pages",
@@ -336,11 +338,11 @@
   "source_ordinary_math_ink_gate": {
     "report_sha256": "930c388700ac8f015f3171f31cde87b8e28ca787a7f68cc2964927774be842f2",
     "audit_source_generation": "source-v41",
-    "exact_identity_gate_assets": 1719,
+    "exact_identity_gate_assets": 1477,
     "changed_or_archived_assets_not_transferred": 2,
     "full_book_accepted": false,
     "introduced_gate_assets": 11116,
-    "current_unresolved_gate_assets": 1719,
+    "current_unresolved_gate_assets": 1477,
     "resolved_by_v47_local_recrop": 52,
     "resolved_by_v49_local_recrop": 794,
     "resolved_by_v50_local_recrop": 1658,
@@ -350,7 +352,8 @@
     "resolved_by_v57_exact_local_recrops": 1273,
     "resolved_by_v57_fresh_active_unit_review": 2,
     "resolved_by_v58_exact_local_recrops": 62,
-    "resolved_by_v59_exact_local_ink_restorations": 66
+    "resolved_by_v59_exact_local_ink_restorations": 66,
+    "resolved_by_v60_exact_local_ink_restorations": 242
   },
   "registered_local_ink_restorations": {
     "stages": [
@@ -401,9 +404,16 @@
         "resolved_ordinary_ink_gate_issues": 66,
         "frozen_combination_proof_sha256": "c60810c1b05445564d158b7978385ef0bd0194fdc6dc8f5fd2d89040d6c13604",
         "complete_formal_grammar_scopes_not_counted": true
+      },
+      {
+        "source_stage": "v60",
+        "accepted_local_asset_repairs": 242,
+        "resolved_ordinary_ink_gate_issues": 242,
+        "frozen_combination_proof_sha256": "0153cb786f8d6af5521910f29c048448a0af6eb02bbfe4bc3647aa2c8302ec8f",
+        "complete_numeric_powers_and_source_paragraph_repairs_not_counted": true
       }
     ],
-    "cumulative_local_asset_repairs": 9389,
+    "cumulative_local_asset_repairs": 9631,
     "whole_formula_or_book_acceptance": false,
     "limitation": "Cumulative selected native glyph restorations in registered source generations, including partial math and symbols; not a count of complete formulas."
   },
@@ -420,7 +430,7 @@
     "old_review_pass_copied": 0,
     "formula_acceptance_inferred": false
   },
-  "safe_pending_tasks_not_whole_book_acceptance": 443,
+  "safe_pending_tasks_not_whole_book_acceptance": 454,
   "full_book_translation_complete": false,
   "full_book_pdf_accepted": false,
   "full_book_visual_acceptance_complete": false,
