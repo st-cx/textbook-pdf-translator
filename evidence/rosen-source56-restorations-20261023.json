@@ -1,0 +1,31 @@
+{
+  "schema": "registered-source-math-context-and-native-restoration-summary-v1",
+  "source_generation": "source-v56",
+  "source_book_sha256": "fc458fbaa49f0f8e0aabd30ad66f3712faa5418981c5af2b589cc9a4162a5eb6",
+  "internal_exact_saved_record_delta_sha256": "eef3d2bcdcf63077f7173f899ec9c08381880c70e488e247a21e9c23ddd31bb4",
+  "new_local_ordinary_native_restorations": 3721,
+  "cumulative_local_ordinary_native_restorations": 7988,
+  "whole_operator_objects_separately_repaired": 5,
+  "exact_operator_owner_rows_corrected": 10,
+  "native_math_context_scope_objects": 30,
+  "faithful_readonly_transcripts_accepted": 29,
+  "incomplete_fragment_transcript_rejected_and_gated": 1,
+  "new_bar_native_objects": 17,
+  "existing_native_objects_retargeted_with_context": 13,
+  "graphics_ledger_records_corrected": 34,
+  "exact_source_issues_closed": 3730,
+  "new_strict_gates_retained": 2,
+  "current_source_errors": 3980,
+  "need_translation": 28658,
+  "readonly_transcription_is_not_rendered_as_formula": true,
+  "old_semantic_passes_copied": 0,
+  "counts_are_internal_local_scopes_not_a_benchmark": true,
+  "whole_book_formula_or_layout_accepted": false,
+  "private_source_text_images_translations_or_paths_included": false,
+  "limitations": [
+    "Local glyph restoration is not complete mathematical structure certification.",
+    "Only the explicitly reviewed readonly transcript cohort is covered, not all mathematical contexts.",
+    "A restored bar does not resolve an incomplete inequality boundary.",
+    "A newly verifiable operator-limit split remains blocked."
+  ]
+}
