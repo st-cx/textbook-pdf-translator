@@ -1,0 +1,48 @@
+{
+  "recorded_at_utc": "2026-10-23T12:33:54.851174+00:00",
+  "scope": "Explicit source-bound exercise partitioning and optional percentage dimension validation; no full-book or competitor acceptance.",
+  "regression_receipt_sha256": "d909e07eba9645f5c1536d9ac98215124529e8299df93fdcfb719c88cacfb58c",
+  "local_tests": {
+    "counted": 812,
+    "passed": 795,
+    "skipped": 17,
+    "failures": 0,
+    "errors": 0,
+    "seconds": 26.529,
+    "source_unchanged_during_tests": true,
+    "live_model_calls": 0,
+    "hosted_ci": false
+  },
+  "partition": {
+    "portable_regressions": 14,
+    "current_source_default_80_content_page_limit_was_already_safe": true,
+    "tested_79_content_page_boundary_expanded_to_81": true,
+    "overlapping_source_link_groups_transitively_kept_together": true,
+    "boundaries_derived_from_validated_actual_members_not_declared_page_ranges": true,
+    "partial_member_selection_rejected": true,
+    "no_plan_preserves_previous_behavior": true,
+    "new_actual_full_chinese_preview_generated": false,
+    "source_scope_missing_translations_blocked_layout": true,
+    "different_reviewer_receipt_sha256": "eecf11c989d23585326eab058fb351a7e96be6fee781b840ddb19c2d51c12d89"
+  },
+  "percentage": {
+    "explicit_opt_in_only": true,
+    "legacy_unmarked_behavior_unchanged": true,
+    "quantity_and_semantic_unit_modules_unchanged": true,
+    "independent_full_Store_invalid_targets_rejected": 51,
+    "independent_lexical_value_positives": 15,
+    "lexical_positives_are_not_full_translation_acceptance": true,
+    "invalid_source_policy_cases_rejected": 5,
+    "portable_tests": 52,
+    "test_groups_overlap_not_additive_benchmark": true,
+    "prior_three_private_candidates_rejected_not_deployed": true,
+    "original_six_latest_full_Store_reproductions_rejected": true,
+    "root_independent_review_sha256": "f911d9261d5d9977675d49655fc62b4f720c8c8cec11480d58bc328deb60bbbe",
+    "source_policy_registration_required_separately": true,
+    "value_equality_is_not_object_association_or_semantic_acceptance": true
+  },
+  "full_book_translation_complete": false,
+  "full_book_pdf_accepted": false,
+  "competitor_leadership_established": false,
+  "private_source_material_published": false
+}

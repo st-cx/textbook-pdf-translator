@@ -24,6 +24,7 @@ from .models import (RULES_VERSION, TOKEN_RE, TRANSLATABLE, Book, digest,
                      protected_asset_descriptor, validate_translation)
 
 from .numeric_policy import numeric_policy_fields, frozen_policy_matches
+from .percentage_policy import percentage_policy_fields, frozen_percentage_policy_matches
 
 PROTOCOL_VERSION = 2
 TRANSLATION_PACKET_MAX_IDS = 6
@@ -100,7 +101,7 @@ def make_tasks(book: Book, glossary: dict, target_chars: int = 2400) -> list[dic
     for batch in batches:
         start, end = position[batch[0].id], position[batch[-1].id]
         context = lambda seq: [
-            {"id": e.id, "page": e.page, "text": e.text, "source_hash": e.source_hash, "readonly": True, **numeric_policy_fields(e)}
+            {"id": e.id, "page": e.page, "text": e.text, "source_hash": e.source_hash, "readonly": True, **numeric_policy_fields(e), **percentage_policy_fields(e)}
             for e in seq if spans[e.id] == spans[batch[0].id]
         ]
         protected_ids = set()
@@ -122,7 +123,7 @@ def make_tasks(book: Book, glossary: dict, target_chars: int = 2400) -> list[dic
             "elements": [
                 {"id": e.id, "source_hash": e.source_hash, "kind": e.kind,
                  "page": e.page, "text": e.text, "group_id": e.group_id, "chapter": e.chapter,
-                 "table_headers":e.metadata.get('table_headers',[]), **numeric_policy_fields(e)}
+                 "table_headers":e.metadata.get('table_headers',[]), **numeric_policy_fields(e), **percentage_policy_fields(e)}
                 for e in batch
             ],
             "protected_assets_schema": TASK_ASSET_SCHEMA,
@@ -333,7 +334,7 @@ def _chat(provider: Provider, messages: list[dict]) -> tuple[str, dict]:
 
 
 def _risk(element) -> bool:
-    return bool(numeric_policy_fields(element) or TOKEN_RE.search(element.text) or element.kind in {"exercise", "table_cell", "figure_label"}
+    return bool(numeric_policy_fields(element) or percentage_policy_fields(element) or TOKEN_RE.search(element.text) or element.kind in {"exercise", "table_cell", "figure_label"}
                 or len(element.text) > 1200 or re.search(
                     r"\b(theorem|proof|definition|lemma|corollary|if and only if)\b", element.text, re.I))
 
@@ -386,6 +387,7 @@ def _review_hash_from_digest(element, translation_hash, book, glossary, *, legac
     if not legacy:
         value["review_hash_schema"] = REVIEW_HASH_SCHEMA
     value.update(numeric_policy_fields(element))
+    value.update(percentage_policy_fields(element))
     return digest(value)
 
 
@@ -721,7 +723,7 @@ def _current_task(task, book, glossary):
     if any(e["id"] not in elements or e.get("source_hash") != elements[e["id"]].source_hash
            for e in frozen + context):
         return False
-    if any(not frozen_policy_matches(row, elements[row["id"]]) for row in frozen + context):
+    if any(not frozen_policy_matches(row, elements[row["id"]]) or not frozen_percentage_policy_matches(row, elements[row["id"]]) for row in frozen + context):
         return False
     descriptors = payload["protected_asset_descriptors"]
     required = {aid for e in frozen + context
@@ -914,7 +916,7 @@ def run_translation(book, store, config_path, provider=None, workers=4, review_p
                       "glossary": glossary, "style_rules": list(STYLE_RULES),
                       "protected_assets": {aid: task["payload"]["protected_assets"][aid] for aid in sorted(assets)},
                       "elements": [{"id": eid, "source": element_map[eid].text, "translation": candidates[eid],
-                                    **numeric_policy_fields(element_map[eid])}
+                                    **numeric_policy_fields(element_map[eid]), **percentage_policy_fields(element_map[eid])}
                                    for eid in ids],
                       "required_response": {"task_id": task["id"], "source_hash": task["source_hash"],
                                             "reviews": {eid: {"passed": True, "issues": []} for eid in ids}}}
@@ -1266,7 +1268,7 @@ def _run_review_sequential(book, store, config_path, provider, max_elements=None
         bindings={eid:_review_binding(elements[eid],accepted[eid],book,glossary) for eid in ids}
         body = {"rules_version": RULES_VERSION, "glossary": glossary, "style_rules": list(STYLE_RULES),
                 "elements": [{"id": eid, "source": elements[eid].text, "translation": accepted[eid],
-                              "review_hash": bindings[eid]['review_hash'], **numeric_policy_fields(elements[eid])} for eid in ids],
+                              "review_hash": bindings[eid]['review_hash'], **numeric_policy_fields(elements[eid]), **percentage_policy_fields(elements[eid])} for eid in ids],
                 "protected_assets": {aid: {"text": book.assets[aid].text, "sha256": book.assets[aid].sha256}
                                      for aid in assets}}
         source_hash = digest(body)

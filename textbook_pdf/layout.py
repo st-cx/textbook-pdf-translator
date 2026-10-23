@@ -1396,12 +1396,30 @@ def _partition_book(book):
     except (TypeError, ValueError):
         limit = 80
     pages = list(dict.fromkeys(e.page for e in book.elements))
+    page_index = {page: i for i, page in enumerate(pages)}
+    flow_spans = {}
+    plan = book.profile.get(PLAN_KEY)
+    if plan:
+        # Validate the exact current source records and visible adjacency before
+        # treating any flow as atomic. Pages come only from those actual
+        # members; a plan's claimed page range never controls partitioning.
+        from .exercise_flow_adapter import annotate
+        page_info = {int(p.get("number", p.get("page", i + 1))): p
+                     for i, p in enumerate(book.pages)}
+        visible = [e for e in book.elements if e.kind not in _PERIPHERAL
+                   and not e.metadata.get("render_suppressed")]
+        checked = {e.id: e for e in annotate(visible, plan, page_info)}
+        for unit in plan["units"]:
+            members = [checked[m["id"]] for m in unit["members"] if m["id"] in checked]
+            if not members:
+                continue
+            positions = [page_index[e.page] for e in members]
+            flow_spans[("verified-exercise-flow", unit["anchor_id"])] = (min(positions), max(positions))
     if len(pages) <= limit:
         return [book]
-    page_index = {page: i for i, page in enumerate(pages)}
     graphic_groups = {e.group_id for e in book.elements
                       if e.group_id and e.kind in {"figure", "image", "table"}}
-    spans = {}
+    spans = dict(flow_spans)
     for element in book.elements:
         if element.group_id in graphic_groups or element.metadata.get('cross_page_math'):
             position = page_index[element.page]

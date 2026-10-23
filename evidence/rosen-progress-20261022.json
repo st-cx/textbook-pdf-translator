@@ -1,6 +1,6 @@
 {
   "recorded_on": "2026-10-23",
-  "recorded_at_utc": "2026-10-23T11:37:34.600515+00:00",
+  "recorded_at_utc": "2026-10-23T12:36:57.035706+00:00",
   "version": "2.0.0rc4",
   "source_snapshot": "source-v60",
   "registered_source_snapshot": "source-v60",
@@ -11,18 +11,18 @@
   "source_elements": 42934,
   "source_assets_including_archived": 71094,
   "required_translations": 28649,
-  "current_contract_accepted_translations": 11236,
-  "current_accepted_rows_including_preserved_elements": 12071,
-  "historical_accepted_rows": 14212,
+  "current_contract_accepted_translations": 11416,
+  "current_accepted_rows_including_preserved_elements": 12251,
+  "historical_accepted_rows": 14370,
   "semantic_review_current_contract": {
     "required": 28649,
-    "accepted": 11236,
-    "selected": 21359,
-    "passed": 1870,
-    "pending": 5325,
-    "failed": 3,
-    "awaiting_translation": 14161,
-    "unbound_failure_diagnostics": 3,
+    "accepted": 11416,
+    "selected": 21357,
+    "passed": 2045,
+    "pending": 5272,
+    "failed": 5,
+    "awaiting_translation": 14035,
+    "unbound_failure_diagnostics": 1,
     "coverage_complete": false,
     "counts_are_current_hash_bound": true,
     "semantic_units": {
@@ -218,8 +218,8 @@
     "known_atomic_pages_current_blocking": []
   },
   "local_source_regressions": {
-    "counted": 746,
-    "passed": 729,
+    "counted": 812,
+    "passed": 795,
     "skipped": 17,
     "failures": 0,
     "errors": 0,
@@ -227,7 +227,7 @@
     "hosted_ci": false
   },
   "external_provider": {
-    "book_model_requests_this_resume": 1543,
+    "book_model_requests_this_resume": 1702,
     "book_request_count_basis": "usage-row delta from frozen pre-resume snapshot",
     "compatibility_probe_requests": 2,
     "compatibility_probe_material": "self-authored semantic sanity cases; no book pages",
@@ -430,7 +430,7 @@
     "old_review_pass_copied": 0,
     "formula_acceptance_inferred": false
   },
-  "safe_pending_tasks_not_whole_book_acceptance": 454,
+  "safe_pending_tasks_not_whole_book_acceptance": 440,
   "full_book_translation_complete": false,
   "full_book_pdf_accepted": false,
   "full_book_visual_acceptance_complete": false,

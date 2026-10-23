@@ -7,11 +7,11 @@
   "inputs": [
     {
       "path": "generated/original-counting-en.pdf",
-      "sha256": "2daf0898fdcafdff949355cd37606f708ea8edf386a059142b228f8c726f0224"
+      "sha256": "5706c341d20a6aedbb981b27aa6e82922f850d6a8ee98f0865837485cf65d823"
     },
     {
       "path": "generated/original-counting-image-only.pdf",
-      "sha256": "5df976b40471d4eb31fc9b82e8880fcc7e808d1381664b367e2737b967fac57c"
+      "sha256": "d9ea7a6055da1552f91ad90ce088f5aa3e251cce0af97681dafde3765dbe2ce2"
     }
   ],
   "source_preview": {
@@ -28,14 +28,14 @@
   "native_source_text_characters": 1122,
   "raster_source_text_characters": 0,
   "raster_source_outline_entries": 0,
-  "actual_build_seconds": 2.867,
+  "actual_build_seconds": 2.593,
   "variants": [
     {
       "variant": "native",
       "source_pdf": "generated/original-counting-en.pdf",
-      "source_sha256": "2daf0898fdcafdff949355cd37606f708ea8edf386a059142b228f8c726f0224",
+      "source_sha256": "5706c341d20a6aedbb981b27aa6e82922f850d6a8ee98f0865837485cf65d823",
       "output_pdf": "generated/native/counting-native-zh.pdf",
-      "output_sha256": "3cb006be888fc8c77c0567a5ccdad1cfbf2345eccc27dbc012384f0545061cb6",
+      "output_sha256": "8ca37c878774eadffd5ccbad6f28bdc02dad03f3da950ce5f3a22497e7d13ae3",
       "output_pages": 1,
       "source_elements": 11,
       "accepted_authored_translations": 9,
@@ -69,9 +69,9 @@
     {
       "variant": "raster",
       "source_pdf": "generated/original-counting-image-only.pdf",
-      "source_sha256": "5df976b40471d4eb31fc9b82e8880fcc7e808d1381664b367e2737b967fac57c",
+      "source_sha256": "d9ea7a6055da1552f91ad90ce088f5aa3e251cce0af97681dafde3765dbe2ce2",
       "output_pdf": "generated/raster/counting-raster-zh.pdf",
-      "output_sha256": "7988ef4094b3299a550aceb3de26e92761f5db4238e4199adf2a8feb89dafd9c",
+      "output_sha256": "9fa5085a2b8ba1ffbcab35b3ac3f1536c3cd6d8a37c882576cdbae9bc9b2fa6c",
       "output_pages": 1,
       "source_elements": 11,
       "accepted_authored_translations": 9,
@@ -109,5 +109,5 @@
     "重建后的PDF哈希可能变化，必须重新检查；本记录只绑定列出的当前文件。"
   ],
   "version": "2.0.0rc4",
-  "renderer_sha256": "e635e9c7642c0ac400ee1a26d508d286dc8c4298218964c1b86803c1ac1f4860"
+  "renderer_sha256": "a4417da1d752b8217e9e88f1f19c8143a19fa2ef7f32ff3b9fdd0969447668df"
 }
