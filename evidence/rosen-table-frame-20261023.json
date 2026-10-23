@@ -1,0 +1,34 @@
+{
+  "schema": "root-direct-table-frame-visual-readback-v1",
+  "source": "source-v62",
+  "source_page": 103,
+  "printed_page": "80",
+  "output_pages": 1,
+  "required_translations": 28,
+  "accepted_translations": 28,
+  "protected_asset_occurrences": 40,
+  "passed_asset_occurrences": 40,
+  "table_caption_and_grid_frame_center_difference_pt": 0.0,
+  "caption_visible_ink_center_difference_pt": 2.1249923706054688,
+  "caption_visible_ink_note": "The final Chinese punctuation hangs beyond its advance; measured visible ink is2.125pt asymmetric. The actual compiled caption/table frames share both edges.",
+  "caption_search_rects_union_count": 2,
+  "table_left_pt": 145.62049865722656,
+  "table_right_pt": 395.72601318359375,
+  "direct_visual_reviewed": true,
+  "PNG_fresh_rerender_identical": true,
+  "pdf_sha256": "dfd4d7554e2074e2c7db208c992585670c2a557a90bc28c403b3e9d8fc5032f7",
+  "rendering_receipt_sha256": "784fee3d22c3ba252385d21ba96637e34c7d1decc3e25f20e539a0e244dfaac3",
+  "quality_error_codes": {
+    "legacy_formula_ambiguous": 4
+  },
+  "quality_warnings": 34,
+  "historical_legacy_errors_retained": 4,
+  "API_calls": 0,
+  "DB_writes": 0,
+  "source_changes": 0,
+  "whole_page_or_book_accepted": false,
+  "limitations": [
+    "Only caption/table frame alignment, unchanged object dimensions and visible page inspection; original table color/title-panel design and other chapter defects remain separate.",
+    "Old import ambiguities are preserved and do not establish the current source object fidelity."
+  ]
+}

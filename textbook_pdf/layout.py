@@ -314,6 +314,11 @@ def _associated_groups(elements, texts, book, geometry, profile):
     available = geometry["height"] - geometry["top"] - geometry["bottom"]
     page_info = {int(p.get("number", p.get("page", i + 1))): p for i, p in enumerate(book.pages)}
     graphic_group_ids = {e.group_id for e in elements if e.group_id and e.kind in {"figure", "table", "image"}}
+    # A detached caption and its proved structured table need the same actual
+    # frame. Otherwise the caption centers over the full page while a narrow
+    # table remains at the page's left margin.
+    captioned_tables = {e.id: e for e in elements if e.kind == "table"
+                        and e.metadata.get("table_grid") and e.metadata.get("caption_id")}
     connective_group_ids = {e.group_id for e in elements if e.group_id and e.metadata.get("role") == "body_connective"}
     frames = {}
     for e in elements:
@@ -404,6 +409,21 @@ def _associated_groups(elements, texts, book, geometry, profile):
             width = min(frame[1] * factor - max(frame[0] * factor, geometry["left"]), full_width - inset)
         if element.metadata.get("banner_background_asset_ids"):
             columns, width, inset = 1, full_width, 0
+        table_frame = captioned_tables.get(element.id) or captioned_tables.get(element.metadata.get("anchor_id"))
+        if (table_frame and (element.id == table_frame.id or
+                            element.id == table_frame.metadata.get("caption_id"))
+                and table_frame.bbox and len(table_frame.bbox) == 4):
+            grid = table_frame.metadata["table_grid"]
+            rows = grid.get("rows", [])
+            raw_widths = grid.get("col_widths", [])
+            if (rows and isinstance(raw_widths, list) and len(raw_widths) == len(rows[0])
+                    and all(isinstance(w, (int, float)) and not isinstance(w, bool)
+                            and math.isfinite(w) and w > 0 for w in raw_widths)):
+                table_width = max(sum(raw_widths), sum(_table_column_minima(table_frame, book, profile)))
+                source_width = float(page_info.get(table_frame.page, {}).get("width", geometry["width"]))
+                table_inset = max(0, table_frame.bbox[0] * geometry["width"] / source_width - geometry["left"])
+                if table_width <= full_width - table_inset:
+                    columns, width, inset = 1, table_width, table_inset
         group_assets = {asset_id for e in group for asset_id in e.asset_ids + TOKEN_RE.findall(texts[e.id])}
         natural_width = max((book.assets[a].width for a in group_assets if a in book.assets), default=0)
         for e in group:

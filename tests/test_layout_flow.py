@@ -11,6 +11,49 @@ import pymupdf
 class LayoutFlowTests(unittest.TestCase):
     geometry = {"width": 612, "height": 792, "left": 48, "right": 48, "top": 45, "bottom": 45, "gutter": 18}
 
+    def test_actual_caption_is_centered_over_its_narrow_table_frame(self):
+        try:
+            layout._Runtime.find()
+        except layout.CompositionError:
+            self.skipTest("Pinned Typst runtime is optional")
+        directory = Path(__file__).resolve().parent / "_tmp_layout_flow" / uuid.uuid4().hex
+        directory.mkdir(parents=True)
+        try:
+            caption = Element("caption", "caption", "Table title", 1, [155, 80, 340, 92],
+                              group_id="table", metadata={"anchor_id": "table"})
+            table = Element("table", "table", "", 1, [145, 95, 395, 160], group_id="table",
+                            metadata={"caption_id": "caption", "table_grid": {
+                                "rows": [["c1", "c2"], ["c3", "c4"]], "header_rows": 1,
+                                "col_widths": [125, 125]}})
+            cells = [Element("c" + str(n), "table_cell", "Cell", 1, [145, 95, 270, 110])
+                     for n in range(1, 5)]
+            book = Book("self-authored.pdf", "self-authored", "Table frame", 1, [1],
+                        pages=[{"number": 1, "width": 612, "height": 792, "printed_page": "1"}],
+                        elements=[caption, table] + cells)
+            translations = {"caption": "表格标题", **{c.id: "单元格" for c in cells}}
+            before = json.dumps([e.__dict__ for e in book.elements], sort_keys=True)
+            result = layout.compose(book, translations, directory / "rendered")
+            with pymupdf.open(result["pdf_path"]) as doc:
+                self.assertEqual(len(doc), 1)
+                page = doc[0]
+                rect = page.search_for("表格标题")[0]
+                # Read the actual drawn table envelope, not just the planner's estimate.
+                rules = [d["rect"] for d in page.get_drawings() if d.get("type") in {"s", "fs"}]
+                self.assertTrue(rules)
+                left, right = min(r.x0 for r in rules), max(r.x1 for r in rules)
+                self.assertAlmostEqual((rect.x0 + rect.x1) / 2, (left + right) / 2, places=2)
+                # Table rules protrude by half a stroke outside the cell frame.
+                self.assertLess(abs(left - 145), .3)
+                self.assertLess(abs(right - left - 250), .6)
+                sizes = [s["size"] for b in page.get_text("dict")["blocks"]
+                         for line in b.get("lines", []) for s in line["spans"] if "单元格" in s["text"]]
+                self.assertTrue(sizes)
+                self.assertTrue(all(abs(size - 10.5) < .01 for size in sizes))
+            self.assertEqual(json.dumps([e.__dict__ for e in book.elements], sort_keys=True), before)
+        finally:
+            self.assertTrue(directory.resolve().is_relative_to((Path(__file__).resolve().parent / "_tmp_layout_flow").resolve()))
+            shutil.rmtree(directory)
+
     def test_related_label_and_resource_share_anchor_without_mutating_source(self):
         label = Element("label", "sidebar", "EXAMPLE 8", 1, [70,100,133,112])
         body = Element("body", "paragraph", "Prove a proposition.", 1, [145,100,540,136])

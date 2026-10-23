@@ -1,0 +1,60 @@
+{
+  "schema": "sanitized-continuous-textbook-layout-diagnostic-v1",
+  "recorded_on": "2026-10-23",
+  "scope": "Internal seven-page Rosen diagnostic at source-v60; copyrighted material and translations are not published.",
+  "source_generation": "source-v60",
+  "source_book_sha256": "7932691dd2bc0c524d6c00152a507b9a00541e86fdb52654cfbbde8075efaf58",
+  "source_physical_pages": [103, 104, 105, 106, 107, 108, 109],
+  "source_printed_pages": [80, 81, 82, 83, 84, 85, 86],
+  "output_pages": 7,
+  "required_translation_elements": 187,
+  "current_accepted_required_translations": 187,
+  "accepted_rows_including_preserved_elements": 188,
+  "semantic_review": {
+    "selected": 148,
+    "current_passed": 16,
+    "current_pending": 132,
+    "current_failed": 0,
+    "complete": false
+  },
+  "native_glyph_count_only": {"checked_assets": 208, "passed_assets": 208},
+  "source_asset_to_output_pixel_checks": {
+    "checked": 212,
+    "passed": 212,
+    "formula_assets": 208,
+    "figure_assets": 4,
+    "archived_assets_excluded_with_provenance": 44,
+    "original_source_crop_completeness_established": false
+  },
+  "retained_qa_diagnostics": {
+    "errors": 8,
+    "warnings": 287,
+    "legacy_unbound_formula_ambiguity_errors": 8,
+    "current_translation_mechanical_errors": 0,
+    "legacy_diagnostics_deleted": false
+  },
+  "direct_visual_review": {
+    "complete_original_pages_viewed": 7,
+    "complete_output_pages_viewed": 7,
+    "printed_source_evidence_and_rendered_source_ranges_verified": true,
+    "body_size_pt": 10.5,
+    "exercise_size_pt": 9.5,
+    "caption_size_pt": 8.5,
+    "body_shrinking_observed": false,
+    "findings": [
+      "Four original inference separators on physical pages104-105 were not represented; the premise/conclusion rows were flattened.",
+      "Two complete exercise subitems on physical page106 were fragmented and their final phrases were misclassified as sidebars, producing invented rounded boxes and a broken page continuation.",
+      "One table caption was centered over the full text area instead of its narrower table.",
+      "A definition background from the original design was not represented.",
+      "Some justified mathematical lines had excessive spacing. No Chinese clipping or cross-column overwrite was observed at the inspected scale."
+    ]
+  },
+  "diagnostic_pdf_sha256": "d3b7e666360587fff9de1559b319f8aa8d1466af93f0bbf162bbc201701ea2d9",
+  "private_visual_report_sha256": "68225e5fef92ad51a422da7e4a7901212123a4a06bc2e9be6c020758e4bc49f4",
+  "translation_api_requests": 0,
+  "source_or_database_writes": 0,
+  "final_scope_acceptance_passed": false,
+  "full_book_accepted": false,
+  "competitor_leadership_established": false,
+  "limitation": "Accepted translation rows and pixel equality to existing source assets did not detect omitted original vectors or incorrect source roles. These visual findings remain blockers. This diagnostic is not a public comparative benchmark."
+}

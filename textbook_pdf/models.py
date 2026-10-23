@@ -152,6 +152,13 @@ def source_contract_issues(book):
     issues=[]
     duplicates={eid for eid,count in Counter(e.id for e in book.elements).items() if count>1}
     for e in book.elements:
+        if "century_policy" in e.metadata:
+            from .century_policy import century_policy_fields
+            try:
+                century_policy_fields(e)
+            except (ValueError, TypeError, KeyError) as error:
+                issues.append({"code":"source_century_policy_invalid","severity":"error",
+                    "element_id":e.id,"page":e.page,"detail":str(error)})
         if "numeric_policy" in e.metadata:
             from .numeric_policy import numeric_policy_fields
             try:
@@ -194,7 +201,10 @@ def validate_translation(element: Element, translated: str, book: Book | None = 
     # CJK letters border numerals naturally (第5章、1.8节). Unicode \w would
     # incorrectly suppress those numerals and reject otherwise faithful Chinese.
     from .numbers import numeric_fingerprint
-    if "numeric_policy" in element.metadata:
+    if "century_policy" in element.metadata:
+        from .century_policy import century_number_issues
+        issues.extend(century_number_issues(element, translated))
+    elif "numeric_policy" in element.metadata:
         from .numeric_policy import policy_number_issues
         issues.extend(policy_number_issues(element, translated))
     elif numeric_fingerprint(src) != numeric_fingerprint(dst):

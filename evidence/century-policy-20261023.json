@@ -1,0 +1,23 @@
+{
+  "schema": "sanitized-explicit-century-optin-validation-v1",
+  "source_generation_at_compatibility_check": "source-v62",
+  "registered_elements_using_policy_at_check": 0,
+  "implementation_schema": "explicit-single-century-v3",
+  "new_self_authored_tests": 38,
+  "existing_canonical_tasks_compared": 2104,
+  "existing_current_required_translations_compared": 11631,
+  "default_task_and_request_bytes_unchanged": true,
+  "default_rule_review_validation_and_selection_unchanged": true,
+  "old_numeric_and_percentage_implementations_unchanged": true,
+  "actual_external_API_calls": 0,
+  "actual_task_DB_writes": 0,
+  "prototype_rejections_and_boundary_failures_retained": true,
+  "regression_receipt": "source-regressions-20261023-century-table-frame-v2.json",
+  "private_port_receipt_sha256": "aebd8dde216813a9b1060844eec3715ed8d617555924af4402dbd06614630c70",
+  "full_book_accepted": false,
+  "limits": [
+    "Only explicit single centuries1 through21; unknown arithmetic/script/rate/era/range syntax is rejected.",
+    "No explicit century policy is currently registered in the book; this does not certify p302 or all legacy century/date checks.",
+    "Numeric equivalence requires independent semantic review and existing protected-object checks."
+  ]
+}
