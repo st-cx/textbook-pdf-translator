@@ -7,11 +7,11 @@
   "inputs": [
     {
       "path": "generated/original-counting-en.pdf",
-      "sha256": "2c061a59560901b058c5328a467bc3fb1a7334b2392594574a83af2e4023ce67"
+      "sha256": "2daf0898fdcafdff949355cd37606f708ea8edf386a059142b228f8c726f0224"
     },
     {
       "path": "generated/original-counting-image-only.pdf",
-      "sha256": "e52ac2734f6a98e1fbcae7d5419c9716fb3e62ad863f1d29724822f9844337a9"
+      "sha256": "5df976b40471d4eb31fc9b82e8880fcc7e808d1381664b367e2737b967fac57c"
     }
   ],
   "source_preview": {
@@ -20,7 +20,7 @@
   },
   "reproducible_script": {
     "path": "build_demo.py",
-    "sha256": "da4138dad99755d7ae8616a1e25a35c6ae5dbafbef5b77c92cd35e31644628b1"
+    "sha256": "22c6f945398d09061f1023d27f84b739e99fe7ed03b28f14ce6d5d91612308c1"
   },
   "body_font": "Noto Serif SC (locally installed, not copied)",
   "heading_font": "Noto Sans SC (locally installed, not copied)",
@@ -28,14 +28,14 @@
   "native_source_text_characters": 1122,
   "raster_source_text_characters": 0,
   "raster_source_outline_entries": 0,
-  "actual_build_seconds": 2.771,
+  "actual_build_seconds": 2.867,
   "variants": [
     {
       "variant": "native",
       "source_pdf": "generated/original-counting-en.pdf",
-      "source_sha256": "2c061a59560901b058c5328a467bc3fb1a7334b2392594574a83af2e4023ce67",
+      "source_sha256": "2daf0898fdcafdff949355cd37606f708ea8edf386a059142b228f8c726f0224",
       "output_pdf": "generated/native/counting-native-zh.pdf",
-      "output_sha256": "69bd7d3494a5b827d2533258edfe79365a3ac54bfc58eedd8b904dc009445676",
+      "output_sha256": "3cb006be888fc8c77c0567a5ccdad1cfbf2345eccc27dbc012384f0545061cb6",
       "output_pages": 1,
       "source_elements": 11,
       "accepted_authored_translations": 9,
@@ -69,9 +69,9 @@
     {
       "variant": "raster",
       "source_pdf": "generated/original-counting-image-only.pdf",
-      "source_sha256": "e52ac2734f6a98e1fbcae7d5419c9716fb3e62ad863f1d29724822f9844337a9",
+      "source_sha256": "5df976b40471d4eb31fc9b82e8880fcc7e808d1381664b367e2737b967fac57c",
       "output_pdf": "generated/raster/counting-raster-zh.pdf",
-      "output_sha256": "acbb857a28348177cdc6e559dcaad6d88d0f9a85be4ba0f71cb5b92fef1c36a6",
+      "output_sha256": "7988ef4094b3299a550aceb3de26e92761f5db4238e4199adf2a8feb89dafd9c",
       "output_pages": 1,
       "source_elements": 11,
       "accepted_authored_translations": 9,
@@ -109,5 +109,5 @@
     "重建后的PDF哈希可能变化，必须重新检查；本记录只绑定列出的当前文件。"
   ],
   "version": "2.0.0rc4",
-  "renderer_sha256": "160a4ae95fe77f3eebd088cb0ebd3591b7af0e7d8848321d655b145a83c42213"
+  "renderer_sha256": "e635e9c7642c0ac400ee1a26d508d286dc8c4298218964c1b86803c1ac1f4860"
 }

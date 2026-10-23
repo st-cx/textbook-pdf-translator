@@ -121,33 +121,51 @@ class UnitReviewStore:
         s=self.store
         local=definitions(s.book)
         if uid not in local:raise ValueError('Unit is not explicitly opted in')
-        current=s.db.execute("SELECT json_extract(value,?,?,?,?) FROM metadata WHERE key='book'",
-            ('$.source_sha256','$.profile.'+PROFILE_KEY+'.'+json.dumps(uid),'$.schema_version','$.profile.job_dir')).fetchone()
-        if not current:raise ValueError('Current registered book missing')
-        source,u,version,registered_root=json.loads(current[0])
-        if u!=local[uid]or source!=s.book.source_sha256 or version!=s.book.schema_version:raise ValueError('Registered unit or source differs from local session')
+        u=local[uid]
+        ids=u['member_ids']+u.get('context_ids',[])+u.get('intervening_header_ids',[])
+        if len(ids)!=len(set(ids)):raise ValueError('Member/context/header identity overlap')
+        sources={};translations={};aids_by_element={};positions={}
+        for eid in ids:
+            row=s.db.execute('SELECT * FROM elements WHERE id=?',(eid,)).fetchone()
+            if not row:raise ValueError('Missing current source member/context')
+            e=Element(**json.loads(row['json']))
+            position=u['source_ordinals'][eid]
+            if not isinstance(position,int)or isinstance(position,bool)or position<0:raise ValueError('Invalid source ordinal')
+            sources[eid]=(row,e);positions[eid]=position
+            translations[eid]=s.db.execute('SELECT * FROM translations WHERE element_id=?',(eid,)).fetchone()
+            aids_by_element[eid]=sorted(set(e.asset_ids)|set(TOKEN_RE.findall(e.text)))
+        # All values come from the caller's same held read/write transaction.
+        # Extract many small fields in one parse of the large registered Book.
+        # Bounded chunks avoid SQLite argument limits for unusually long units.
+        header=['$.source_sha256','$.profile.'+PROFILE_KEY+'.'+json.dumps(uid),'$.schema_version','$.profile.job_dir']
+        body_paths={eid:f'$.elements[{positions[eid]}]'for eid in ids}
+        asset_paths={aid:'$.assets.'+json.dumps(aid)for aids in aids_by_element.values()for aid in aids}
+        paths=list(dict.fromkeys(header+list(body_paths.values())+list(asset_paths.values())))
+        persisted={}
+        for index in range(0,len(paths),32):
+            chunk=paths[index:index+32]
+            arguments=chunk if len(chunk)>1 else chunk+['$.schema_version']
+            row=s.db.execute('SELECT json_extract(value,'+','.join('?'for _ in arguments)+") FROM metadata WHERE key='book'",arguments).fetchone()
+            if not row:raise ValueError('Current registered book missing')
+            values=json.loads(row[0])
+            persisted.update(zip(chunk,values))
+        source,current_unit,version,registered_root=[persisted[p]for p in header]
+        if current_unit!=u or source!=s.book.source_sha256 or version!=s.book.schema_version:raise ValueError('Registered unit or source differs from local session')
         if registered_root!=s.book.profile.get('job_dir'):raise ValueError('Registered source root differs from local session')
         if registered_root is not None and(not isinstance(registered_root,str)or not registered_root.strip()):
             raise ValueError('Invalid registered source root')
         source_root=Path(registered_root).resolve()if registered_root is not None else s.path.parent.resolve()
-        ids=u['member_ids']+u.get('context_ids',[])+u.get('intervening_header_ids',[])
-        if len(ids)!=len(set(ids)):raise ValueError('Member/context/header identity overlap')
         glossary=json.loads(s.db.execute("SELECT value FROM metadata WHERE key='glossary'").fetchone()[0])
         rows={};actual={};assets={}
         for eid in ids:
-            r=s.db.execute('SELECT * FROM elements WHERE id=?',(eid,)).fetchone()
-            if not r:raise ValueError('Missing current source member/context')
-            e=Element(**json.loads(r['json']));t=s.db.execute('SELECT * FROM translations WHERE element_id=?',(eid,)).fetchone()
-            position=u['source_ordinals'][eid]
-            if not isinstance(position,int)or isinstance(position,bool)or position<0:raise ValueError('Invalid source ordinal')
-            persisted=s.db.execute("SELECT json_extract(value,?) FROM metadata WHERE key='book'",(f'$.elements[{position}]',)).fetchone()
-            if not persisted or json.loads(persisted[0])!=asdict(e):raise ValueError('Source ordering or persisted body/context changed')
-            aids=sorted(set(e.asset_ids)|set(TOKEN_RE.findall(e.text)))
+            r,e=sources[eid];t=translations[eid]
+            if persisted[body_paths[eid]]!=asdict(e):raise ValueError('Source ordering or persisted body/context changed')
+            aids=aids_by_element[eid]
             for aid in aids:
-                a=s.db.execute("SELECT json_extract(value,?) FROM metadata WHERE key='book'",('$.assets.'+json.dumps(aid),)).fetchone()
-                if not a or not a[0]:raise ValueError('Missing current protected descriptor')
+                value=persisted[asset_paths[aid]]
+                if not value:raise ValueError('Missing current protected descriptor')
                 from .models import Asset,file_sha256
-                asset=Asset(**json.loads(a[0]));path=Path(asset.path)
+                asset=Asset(**value);path=Path(asset.path)
                 if not path.is_absolute():
                     roots=(source_root,s.path.parent.resolve())
                     path=next((root/path for root in roots if(root/path).is_file()),source_root/path)

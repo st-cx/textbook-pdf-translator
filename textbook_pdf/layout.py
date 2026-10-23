@@ -20,6 +20,7 @@ import time
 import uuid
 
 from .models import Book, Element, TOKEN_RE, TRANSLATABLE, file_sha256, source_label, safe_filename, needs_translation, digest
+from .exercise_flow_adapter import PLAN_KEY
 
 TYPST_VERSION = "0.15.1"
 _TEMPLATE = Path(__file__).with_name("templates") / "book.typ"
@@ -43,10 +44,14 @@ def rendering_binding(book: Book, translations: dict) -> dict:
                          "height": a.height, "baseline": a.baseline, "metadata": a.metadata}
                    for aid, a in book.assets.items()},
     }
+    adapter_identity = {}
+    if book.profile.get(PLAN_KEY):
+        from . import exercise_flow_adapter
+        adapter_identity["exercise_flow_adapter_sha256"] = file_sha256(Path(exercise_flow_adapter.__file__).resolve())
     return {"schema_version": 1, "source_sha256": book.source_sha256,
             "renderer_identity": {"layout_sha256": file_sha256(Path(__file__).resolve()),
                                   "template_sha256": file_sha256(_TEMPLATE),
-                                  "typst_version": TYPST_VERSION},
+                                  "typst_version": TYPST_VERSION, **adapter_identity},
             "selected_pages": book.selected_pages,
             "elements": {e.id: e.source_hash for e in book.elements},
             "translations": {e.id: digest(translations.get(e.id)) for e in book.elements if needs_translation(e)},
@@ -1101,6 +1106,8 @@ def _build_source(book, translations, outdir, geometry, paths, allow_incomplete,
     margin_notes, margin_ids = _margin_attachments(visible, geometry)
     visible = _flow_annotations([e for e in visible if e.id not in margin_ids])
     page_info = {int(p.get("number", p.get("page", i + 1))): p for i, p in enumerate(book.pages)}
+    from .exercise_flow_adapter import annotate, PLAN_KEY
+    visible = annotate(visible, book.profile.get(PLAN_KEY), page_info)
     visible = _exercise_flow_annotations(visible, page_info)
     groups = _associated_groups(visible, texts, book, geometry, profile)
     page_labels = _book_page_labels(book)
@@ -1179,6 +1186,14 @@ def _build_source(book, translations, outdir, geometry, paths, allow_incomplete,
             element_index = 0
             while element_index < len(group):
                 element = group[element_index]
+                if element.metadata.get("layout_only_flow_unit") and _inline_key(element):
+                    stop = element_index + 1
+                    while stop < len(group) and _inline_key(group[stop]) == _inline_key(element):
+                        stop += 1
+                    if stop > element_index + 1:
+                        lines.append(_inline_group_markup(group[element_index:stop], texts, book, paths, geometry, width, profile, issues, page_labels, preview_ids, columns))
+                        element_index = stop
+                        continue
                 if element_index + 1 < len(group) and _same_line_subpart(element, group[element_index + 1]):
                     following = replace(group[element_index + 1], metadata={**group[element_index + 1].metadata, "inline_join": "space"})
                     lines.append(_inline_group_markup([element, following], texts, book, paths, geometry, width,
@@ -1624,6 +1639,11 @@ def compose(book: Book, translations: dict, outdir, output_path=None, allow_inco
     mapping["elapsed_seconds"] = round(time.perf_counter() - started, 3)
     mapping["limitations"] = ["元素位置为实际边界推导的段落片段矩形，非逐字字形框。",
                               "排版成功不等于翻译、公式或视觉检查通过；请运行独立 QA。"]
+    if book.profile.get(PLAN_KEY):
+        from .exercise_flow_adapter import check_reading_order
+        measured_flow_issues = check_reading_order(book.profile[PLAN_KEY], traces, geometry, visible_ids={e.id for e in book.elements})
+        issues.extend(measured_flow_issues)
+        mapping["exercise_flow_check"] = {"opt_in": True, "issues": measured_flow_issues, "passed": not measured_flow_issues}
     blocking = [issue for issue in issues if issue.get("severity") == "error"]
     if blocking and not allow_incomplete:
         # Keep an earlier valid output/map together. Failed measured geometry

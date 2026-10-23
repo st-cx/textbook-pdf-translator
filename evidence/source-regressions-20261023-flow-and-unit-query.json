@@ -1,0 +1,181 @@
+{
+  "recorded_on": "2026-10-23",
+  "suite": "Local public synthetic regressions and optional local probes",
+  "counted": 746,
+  "passed": 729,
+  "skipped": 17,
+  "failures": 0,
+  "errors": 0,
+  "seconds": 26.355,
+  "successful": true,
+  "source_unchanged_during_tests": true,
+  "source_sha256": {
+    "tests/fixtures/original-ordinary-ink-distinct.ttf": "7ffbc4996874f4a6c38fa4d56d39c2ef3e02185371613809cdb4e59315640dbb",
+    "tests/fixtures/original-ordinary-ink.ttf": "27f9fd831fa61711c3c5272fe6637aff33b032f03ae05b96741a41b58c059fc3",
+    "tests/fixtures/original-tall-containers.ttf": "da75a1041bc2742e607fd261fcc4e76d8a05009b84c2e02c0767d67ad9be444e",
+    "tests/fixtures/original-zero-advance.ttf": "186eec6cbdddce9ebd5bc6ba5f7de6e9a6b8c918a9a75f78cb9cc2f31855634a",
+    "tests/test_bibliography_numeric_policy.py": "2e91508bbe5d58314b2be1cbde0908baa9f6df47f937c9cd920fca68fffe9c36",
+    "tests/test_cli.py": "69a4b9316699063699959f6d7a91ccbc3d0bbb917ae584b0078da248cc12810f",
+    "tests/test_contract.py": "a78082d8ce9bcdd1ac8bd21fec6e6ae2973350b7fd052dba2ea701338dfda215",
+    "tests/test_cross_page_math.py": "0c176cd21fda62ca990df64ce20ad1c111a60346fa722575b6e0d4afb2cdb00e",
+    "tests/test_display_math.py": "1bf8492fae91c94b5ff15e0087353725a8c8625e7f5254e0c4e98a5492d118ed",
+    "tests/test_drawing_geometry.py": "8925d1dd37ef39f1b839bce6cd6b4fdf76a39a254da56e206066d769d615c9d0",
+    "tests/test_exercise_flow_adapter.py": "f7b4e0443b6bc97950b0cf2e4bc9ad10177ce64021389147499ed0655d6a391c",
+    "tests/test_extraction.py": "e97039244cb8af025f6940fd03e4655d7eeb55785bc2e3ba7f57363d5b9b1bd1",
+    "tests/test_figure_labels.py": "53ed7e211615e2a661d717ce83921a0408067c16a4974900bcff48f3741c1d5e",
+    "tests/test_font_program_metadata.py": "6a1aa2586ebb2a943acc02740021c5a3756a2f6f45a552d08affb84800ea04d5",
+    "tests/test_font_resource_resolver.py": "8a20310ff5857eebf9d06d886ae805fbef80c9c9f46e5fa2e8505d568c31ba9e",
+    "tests/test_frozen_rule_context.py": "7a60a0bd410a160b8b83fb8c7ec9bf7b0d5bccc0c0511a02cf34dfd9c87a1c90",
+    "tests/test_glyph_geometry.py": "b18a9fa5fc90d124e64d9538fca44e17316d787d6d5cc69fc6786d0a2fd6b704",
+    "tests/test_layout_binding.py": "83817f7d50abea5ad2d745b9a379171f8a0154e6d49f353ca409c8c80ae80221",
+    "tests/test_layout_flow.py": "5b3aefd9123c5a8cd4865dc5b70b910ced2ff0db8d66972b02e8efe824a74e43",
+    "tests/test_math_boundaries.py": "fef6695df570d11e8b51035cf47f1501811f849f4e3644176b74fa8d2db90b49",
+    "tests/test_math_regions.py": "7a42730b7f59bc44da43990dcb4c3c542d44bc539e8cf01cb7ed1dea108ec2d8",
+    "tests/test_named_month_numeric_policy.py": "874809adadfdf5e2e8b4b85bfd444a604f42ea0269e9ca8ddb1addb5a685e8e9",
+    "tests/test_native_clipping.py": "209f2d4b7826f9dc95505cac809e0898af6a896b34839b7e343e94ca55ffb414",
+    "tests/test_native_containers.py": "e164b6ab8cd2a52144c4a610728f9637cd75ac9a2ded2adbdd371640f9895bdc",
+    "tests/test_native_operator_identity.py": "b150f986d782796e38a1e7d6a9d720bff0885f190822bb235440b9f36ccce195",
+    "tests/test_native_operators.py": "f9894f9c341819a53b7ebdd1627c8d7fb6a6649bca44ea3f39c3e9497f285f4f",
+    "tests/test_numeric_policy.py": "5dcb5ba1f616eccf2eb8f1c6b9265bd6c057827359ec54e513293b44c9d0cf38",
+    "tests/test_numeric_unit_binding_contract.py": "625d006f08530a89ebb49b2fab95637c0030729324df26882d1a348e1b2e00a1",
+    "tests/test_ocr_engine.py": "78772a9f76a03a4393296f798ed70af6e969d0bd5a609a8d86374ae19a4d2db3",
+    "tests/test_paragraphs.py": "f197a6c551ae95950282a5ad528fcecec5eb1f8a3b93452bfbd74a6e888cc71c",
+    "tests/test_pipeline.py": "a115c5b89c33a3d912bf52e453cd448b8dcb21878928c786fc3f860ccfe93016",
+    "tests/test_provider_options.py": "b09dd96fc891d21e87b4ebbacba46da9cad735ddd1d9390c51aaca298c996049",
+    "tests/test_public_portability.py": "9e76d877baf235ede32434be98d4f0db55f9d0aa7a46f4ceb3615912c18f9ad3",
+    "tests/test_request_chunks.py": "9534d81f12c6761ac3d7a78f9d91fcdd650ef530f91101600ef6cb4007cba013",
+    "tests/test_review_atomic.py": "e20162326852e1739c1001e43d2683a8558d58da0e2ddb84d45d8fc0b587cad2",
+    "tests/test_scan_adapter.py": "c3cfce7f6983a371b9bfff182a6cb682e0b0ed1aa53e3d80983b479c50693a25",
+    "tests/test_scan_bootstrap.py": "fa1db21d11ddc903f2f678abcf5c8fae3a24a5922c5859dacad9bffb6cefca4e",
+    "tests/test_scan_cli_qa.py": "e55678e4bcbd5b105a46628733dd5be90cd37683c9164b1bf43ca08ea0cb1ae3",
+    "tests/test_scan_detectors.py": "243d136e75e3837718fed2b8e2afdcaefd526ea2173b724d2da3e4c9a86c17ed",
+    "tests/test_scan_layout.py": "fdb485e0dbc5fdd92be6e94f1097872814f8732ae7f5a3cbf294d3649e35ff4a",
+    "tests/test_scan_math_boundaries.py": "b27aadc5a4026c256b70eaa4994ac4998e0d51b3bb06405b904dceba89ff87ba",
+    "tests/test_scan_quality.py": "bf40314f8b6febf28592177152bd7d87ba8e0bebb0c3fbef20b80ff166b2a0b7",
+    "tests/test_selected_ink_prototype.py": "0e1847e2c55486eef7a9b0460f6ff096d171a60ad4b46e39547003f0c93ae62d",
+    "tests/test_semantic_unit_source_root.py": "e1721fa8e355e1729854a56175b21d90e7e8bd9d5845e9c55e7274bde75fec66",
+    "tests/test_semantic_units.py": "c4619d4a96614900e2a108be6ffc1f277ce861c1a4d5b1b308e3170c9483d8e7",
+    "tests/test_source_flow.py": "f27953c8c9bd3b0671dd59db8124408add9102901d5231068513b296ce501cf3",
+    "tests/test_source_integrity.py": "2f4540acb6a19a9d2b7f97d15f58b481894a6e135577ca9029db98bbf446696a",
+    "tests/test_source_pages.py": "ba9adb985aad0f882cd826b5d51b0ab7d9a6ef77d9f2b3ba8d6dc021c8765b8c",
+    "tests/test_source_preflight.py": "a98c0cefbd66593d157a5ce149b65c7a1f4e4081b106c4284307364e5213e406",
+    "tests/test_store_transactions.py": "d03f4e754366e4e133f5fb44e7ca0d8f1921e5e4e3001e1841165ff28fae82f6",
+    "tests/test_tables.py": "ab90458a9a8ff83a33fa70877ab2c3c38c5796d057ef4a4053b7a7f2919425f8",
+    "tests/test_unit_repeated_asset_recheck.py": "3bf77b46131a789e53a1e60c14fb586347d09dbdd6b3038d209d1278314f4ea0",
+    "tests/test_unit_scheduler.py": "a50523d7fd52012e9bf8cad76b94f9be77224e70af18b1f290fef7a373576d78",
+    "tests/test_vector_symbols.py": "fc75579fe5dcde4507734d0b5e7d2db0f731e110cdd21e2f92c08bbe2295389f",
+    "tests/test_visual_checks.py": "cf96d5333de069fc9529670056223a0cad49f4ea9952216a03c13aa9d5f945b4",
+    "textbook_pdf/__init__.py": "250e6d9126b5f655d92e8cd806a171dd67ae2f209bd9eaa6b2c149617b74ba09",
+    "textbook_pdf/babel_adapter.py": "b53ec7b755f1ee3fe6532f8bc1f3a32b01f006d8f2d10c3fa2abaf81a052cca2",
+    "textbook_pdf/bootstrap.py": "384d529080217906303532e5d86243b6fb0d37e0a29c4b6a98bb2caf06bbdbe8",
+    "textbook_pdf/cli.py": "619e188418dc2a72d8f1460023f6f3f072cf0d61b74c9fcb24ca897b35281bf6",
+    "textbook_pdf/cross_page_math.py": "08342ef33db60f7c8b388f09b0a5f6d581e965b95cf6ef525d6ef760c86f24f8",
+    "textbook_pdf/drawing_geometry.py": "45fa8ba4ab9bf6bdaf7164464cf72768b23188a3fbaa7e36e79024e8cfea5450",
+    "textbook_pdf/exercise_flow_adapter.py": "3c5b08fe181d8560774dbc1d98cf8fefaa98309bde5637df85728763ea29fb58",
+    "textbook_pdf/extraction.py": "83c83f12daaa02367b31b5c56761b3133be30c81dc25fa25b4f7b96df20696c0",
+    "textbook_pdf/glyph_geometry.py": "6d9b2e1e8f9651a748a9fe4cf2d6210d394728179ff73e5d10978f9a22261066",
+    "textbook_pdf/layout.py": "e635e9c7642c0ac400ee1a26d508d286dc8c4298218964c1b86803c1ac1f4860",
+    "textbook_pdf/math_regions.py": "d4a07cf766ed2aa65f3f279c2c20371de4481e377ade2d8ec2604f0d5ae79c75",
+    "textbook_pdf/metrics.py": "7c436908a8260b5638fd985a84d24e8e72a903ef78fe654bd2864a1e2b4fbc57",
+    "textbook_pdf/migration.py": "fa1ce90397355784f8e4c34de28f3b32c6227616b24b687a7e0a3067f1bc5795",
+    "textbook_pdf/models.py": "09d5d15f3ca4a6e6156c3b2752fd5c84a39143d2120c73605571072301840887",
+    "textbook_pdf/native_clipping.py": "1d5e0e32344b3e92944a5fe55dbe7c77e33110a1a6d7fbf4c44b5ec062486cae",
+    "textbook_pdf/native_containers.py": "f5b50184e868f9909478b4296b071c2b3d84524221cffeeedd49b900cf0dd468",
+    "textbook_pdf/native_ink_geometry.py": "b8d9b5ea9360c185e07804fdc5536601c86672de372fb0126ddcd4bcb1b36b03",
+    "textbook_pdf/native_operators.py": "814b544b3bbef567c34a3309740a3e687246b25e96273186a3b3bc13ac7b944d",
+    "textbook_pdf/numbers.py": "9717d1ac113ccfa5a8a0a7f3edee065d567e0632af1cd36fdc3f650770bcb205",
+    "textbook_pdf/numeric_policy.py": "b79efd8bf01eade62a50e10e2be7823b6d944109452e8a3bebaeb8954bb2186b",
+    "textbook_pdf/ocr_engine.py": "4f224d2236e941b40abe70abf1d84e2cdb7e450bec149d1ee772cc5b6bc2d4a5",
+    "textbook_pdf/paragraph_adapter.py": "3b9a81650b2a9306fe384bd0760fcb455d7926ce2c162901696f344fb9c145bf",
+    "textbook_pdf/qa.py": "e7dc501309bcd8cc3b13f43edf3aa59e47e824da570a83391b8cae5fe088c592",
+    "textbook_pdf/scan_adapter.py": "59dd267550f498d4a99d334858a5bc3ba26df3e5c78ab7d5656fe896bca94863",
+    "textbook_pdf/scan_detectors.py": "b77703489135f13b7865cbe6a9025d794720a09fcb0ecf2401ce31bba622bcd9",
+    "textbook_pdf/scan_layout.py": "dc4c2587a81cc088b5871fda35ce9dbb3c4f0be4f9799cc26a1a6ee160f3dee7",
+    "textbook_pdf/scan_quality.py": "2f10b3111b9a40f893c9a9f226393684a06681d7f63d7d0c9a344d894fe01e56",
+    "textbook_pdf/semantic_unit_runner.py": "553e3940f161fb1e36937bfbe1f7fb761a96c4452e6165f609f895525515826f",
+    "textbook_pdf/semantic_units.py": "c469cf00f914015f4bc415c0cab87a54c742c70bd18fcf535f7987239a493536",
+    "textbook_pdf/source_flow.py": "a7cb4d5a5200af6a172e95301a318de6cb7cd462c82b33ba6eb06e868b0a06ac",
+    "textbook_pdf/source_integrity.py": "628c237d08656af54829d0135f99862a54c4a277fd464a9295cc2f638d004769",
+    "textbook_pdf/source_pages.py": "4fff7a2bd972976f424c6f5af7ceb2d58cbdcc4c70adabe25d565a8284030f4b",
+    "textbook_pdf/store.py": "5ecbef04cf2c1aa205d98e492732d2aafd0d3f03ea4549a1c4a3547844e86d31",
+    "textbook_pdf/table_adapter.py": "fa4bf6b848d15f7946ae2f6b085b7b5ad296c4ce4bb4863385e456b6bddc5ddf",
+    "textbook_pdf/templates/book.typ": "81bd5b1b2cb7cb6e2879618170d772e99776816c3cb60468c028fe27904b445e",
+    "textbook_pdf/translation.py": "b6582cfaa530986079aec5bc26167c0a166ec7ff24a252e9a3ff0409b3c02eee",
+    "textbook_pdf/visual_checks.py": "da7fd77324a068b68d2b9c674b55e8f0288166298c004761a975f320ec80970e"
+  },
+  "skipped_tests": [
+    {
+      "test": "test_extraction.RealSourceExtractionTests.test_actual_clauses_and_numbered_steps_are_not_fused",
+      "reason": "Local Rosen source is not available"
+    },
+    {
+      "test": "test_extraction.RealSourceExtractionTests.test_actual_math_words_and_copyright_do_not_become_formula_assets",
+      "reason": "Local Rosen source is not available"
+    },
+    {
+      "test": "test_extraction.RealSourceExtractionTests.test_all_source_glyphs_and_references_have_destinations",
+      "reason": "Local Rosen source is not available"
+    },
+    {
+      "test": "test_extraction.RealSourceExtractionTests.test_biography_and_short_if_radical_are_complete",
+      "reason": "Local Rosen source is not available"
+    },
+    {
+      "test": "test_extraction.RealSourceExtractionTests.test_display_fractions_keep_the_whole_original_region",
+      "reason": "Local Rosen source is not available"
+    },
+    {
+      "test": "test_extraction.RealSourceExtractionTests.test_glossary_words_and_entry_boundaries_are_complete",
+      "reason": "Local Rosen source is not available"
+    },
+    {
+      "test": "test_extraction.RealSourceExtractionTests.test_justified_words_and_column_labels_do_not_fragment_body",
+      "reason": "Local Rosen source is not available"
+    },
+    {
+      "test": "test_extraction.RealSourceExtractionTests.test_radical_and_problem_page_marker_are_complete",
+      "reason": "Local Rosen source is not available"
+    },
+    {
+      "test": "test_extraction.RealSourceExtractionTests.test_radical_ascenders_do_not_skip_a_prose_line",
+      "reason": "Local Rosen source is not available"
+    },
+    {
+      "test": "test_extraction.RealSourceExtractionTests.test_statement_labels_and_proof_reasons_keep_rows",
+      "reason": "Local Rosen source is not available"
+    },
+    {
+      "test": "setUpClass (test_ocr_engine.ActualOfflineOCRTests)",
+      "reason": "Set TEXTBOOK_OCR_TEST_MODELS to opt into actual local OCR inference"
+    },
+    {
+      "test": "test_source_flow.RosenNumericRhsTests.test_original_136_real_question_15_is_never_a_numeric_rhs",
+      "reason": "Set TEXTBOOK_TEST_ROSEN_PDF for private original-source checks"
+    },
+    {
+      "test": "test_source_flow.RosenNumericRhsTests.test_original_173_175_310_have_exact_three_proven_numeric_wraps",
+      "reason": "Set TEXTBOOK_TEST_ROSEN_PDF for private original-source checks"
+    },
+    {
+      "test": "test_tables.NativeTableTests.test_actual_rosen_equivalence_body_excludes_only_caption_bands",
+      "reason": "Optional Rosen source is not present on this machine"
+    },
+    {
+      "test": "test_tables.NativeTableTests.test_actual_rosen_merged_caption_tables_use_explicit_safe_fallback",
+      "reason": "Optional Rosen source is not present on this machine"
+    },
+    {
+      "test": "test_tables.NativeTableTests.test_actual_rosen_truth_value_table_translates_headers_only",
+      "reason": "Optional Rosen source is not present on this machine"
+    },
+    {
+      "test": "test_visual_checks.VisualAssetTests.test_actual_typst_embedding_calibrates_one_pixel_antialias_tolerance",
+      "reason": "Optional locally rendered Typst preview is not present"
+    }
+  ],
+  "input_freeze_scope": "All package Python, Typst templates, discovered public test files and self-authored font/JSON fixtures",
+  "live_model_calls": 0,
+  "hosted_ci": false,
+  "private_textbook_fixtures_in_public_tests": false,
+  "full_book_accepted": false
+}

@@ -1,7 +1,7 @@
 {
   "scope": "原创合成Book/Store重排演示；非端到端OCR、解析或机器翻译评测",
   "content_authorship": "新编英文、对应人工中文和简单公式/代码；无教材来源",
-  "updated_utc": "2026-10-23T06:01:05.642586+00:00",
+  "updated_utc": "2026-10-23T10:37:21.726119+00:00",
   "source_preview": {
     "path": "generated/source-preview.png",
     "sha256": "d1642f38d0b021f76e8a76c27f37ad8fe498c580ce227c1b0a909dfa13dc88ff"
@@ -11,11 +11,11 @@
   "input_pdfs": [
     {
       "path": "generated/original-counting-en.pdf",
-      "sha256": "2c061a59560901b058c5328a467bc3fb1a7334b2392594574a83af2e4023ce67"
+      "sha256": "2daf0898fdcafdff949355cd37606f708ea8edf386a059142b228f8c726f0224"
     },
     {
       "path": "generated/original-counting-image-only.pdf",
-      "sha256": "e52ac2734f6a98e1fbcae7d5419c9716fb3e62ad863f1d29724822f9844337a9"
+      "sha256": "5df976b40471d4eb31fc9b82e8880fcc7e808d1381664b367e2737b967fac57c"
     }
   ],
   "native_source_text_characters": 1122,
@@ -27,7 +27,7 @@
       "variant": "native",
       "pdf": {
         "path": "generated/native/counting-native-zh.pdf",
-        "sha256": "69bd7d3494a5b827d2533258edfe79365a3ac54bfc58eedd8b904dc009445676"
+        "sha256": "3cb006be888fc8c77c0567a5ccdad1cfbf2345eccc27dbc012384f0545061cb6"
       },
       "preview": {
         "path": "generated/native/preview-001.png",
@@ -61,7 +61,7 @@
       "variant": "raster",
       "pdf": {
         "path": "generated/raster/counting-raster-zh.pdf",
-        "sha256": "acbb857a28348177cdc6e559dcaad6d88d0f9a85be4ba0f71cb5b92fef1c36a6"
+        "sha256": "7988ef4094b3299a550aceb3de26e92761f5db4238e4199adf2a8feb89dafd9c"
       },
       "preview": {
         "path": "generated/raster/preview-001.png",
@@ -102,9 +102,9 @@
   ],
   "reproducible_script": {
     "path": "build_demo.py",
-    "sha256": "da4138dad99755d7ae8616a1e25a35c6ae5dbafbef5b77c92cd35e31644628b1"
+    "sha256": "22c6f945398d09061f1023d27f84b739e99fe7ed03b28f14ce6d5d91612308c1"
   },
   "version": "2.0.0rc4",
   "page_label_evidence": "No machine-verifiable printed label: use explicit physical-page fallback in both variants.",
-  "renderer_sha256": "160a4ae95fe77f3eebd088cb0ebd3591b7af0e7d8848321d655b145a83c42213"
+  "renderer_sha256": "e635e9c7642c0ac400ee1a26d508d286dc8c4298218964c1b86803c1ac1f4860"
 }

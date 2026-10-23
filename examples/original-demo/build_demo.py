@@ -167,7 +167,9 @@ def run_variant(kind, source, out, boxes, originals, fitz, api):
                  "page_width":W,"page_height":H,"job_dir":str(out.resolve()),
                  "synthetic_demo":True,"source_mode":"synthetic-authoring-manifest"})
     book.save(out / "book.json")
-    with Store(out / "tasks.db") as store:
+    # Rebuilding a PDF changes its file identity. Keep each synthetic run's
+    # database instead of asking Store to overwrite another source contract.
+    with Store(out / ("tasks-" + book.source_sha256 + ".db")) as store:
         store.register(book, {"marker":"标记","stop":"停靠点"})
         for eid, text in ZH.items():
             result = store.put_candidate(eid, text, "original-bilingual-demo-author")

@@ -1,0 +1,57 @@
+{
+  "recorded_at_utc": "2026-10-23T10:40:23.448698+00:00",
+  "scope": "Evidence-bound exercise flow, held-read-transaction unit packet preparation, and exact ink-cache recovery. No complete-book or competitor result.",
+  "exercise_flow": {
+    "original_pages_in_selected_probe": 3,
+    "composed_pages": 4,
+    "original_checked_chains": 2,
+    "guard_tests": 26,
+    "old_measured_flow_errors": 3,
+    "new_measured_flow_errors": 0,
+    "directly_viewed_composed_pages": 4,
+    "immutable_objects_same_size_and_pixel_passed": 162,
+    "default_generated_typst_byte_identical": true,
+    "source_task_rule_review_bindings_unchanged": true,
+    "actual_composer_blocks_invalid_reading_order": true,
+    "adapter_implementation_in_optin_render_binding": true,
+    "local_QA_omits_main_Store_semantic_and_glossary_diagnostics": true,
+    "whole_book_plan_completed": false,
+    "receipt_sha256": "ec582973efafb94495007e86b9581526add2ac9c07991678bdb1ed4450e39cb1",
+    "direct_visual_receipt_sha256": "765adc231d3e8476e4a623021e821d652fb0a7e845174e12727dba23bd1d8654"
+  },
+  "unit_packet_preparation": {
+    "held_real_source_snapshot": "source-v58",
+    "units": 2,
+    "old_book_extract_query_counts": [
+      8,
+      18
+    ],
+    "new_book_extract_query_counts": [
+      1,
+      1
+    ],
+    "old_total_seconds": 28.2978,
+    "new_total_seconds": 2.036298,
+    "content_equal_except_explicit_implementation_version": true,
+    "every_repeated_asset_reference_still_checks_actual_file": true,
+    "old_unit_passes_invalidated_by_implementation_change": true,
+    "API_calls": 0,
+    "database_writes": 0,
+    "full_book_or_API_throughput_benchmark": false,
+    "receipt_sha256": "397ae26a4e0e4ad6373b3890c508e2eac756083504abf90bb3f4bffb9f8e4955"
+  },
+  "source59_local_ink_cache_recovery": {
+    "eligible_current_translatable_rows": 18,
+    "accepted_current_semantic_pending": 18,
+    "other_current_accepted_revisions_changed": 0,
+    "old_semantic_passes_copied": 0,
+    "API_calls": 0,
+    "receipt_sha256": "7efe198a7a9a35c876d0b791ebb0dbe4e90e1010e04bd993055783c4c9fcfafb"
+  },
+  "local_regression_receipt": {
+    "path": "source-regressions-20261023-flow-and-unit-query.json",
+    "sha256": "1b8148d4c0790b7117732e67a9ce25ea15468b1177f00e2571d1c6b076cf1a46"
+  },
+  "whole_book_accepted": false,
+  "competitor_ranking_established": false
+}
