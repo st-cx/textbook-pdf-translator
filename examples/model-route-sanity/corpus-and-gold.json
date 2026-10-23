@@ -1,0 +1,164 @@
+{
+  "schema": "self-authored-model-route-check-v1",
+  "payload": {
+    "run_id": "a25bd0b8ef02458b98d6e7a2f08f431b",
+    "glossary": {
+      "direct proof": "直接证明",
+      "worker": "工作进程",
+      "packet": "数据包",
+      "graph": "图",
+      "connected": "连通",
+      "request": "请求",
+      "condition": "条件",
+      "sensor record": "传感记录"
+    },
+    "style_rules": [
+      "译为简体中文大学教材书面语，准确、自然、克制；只翻译，不添加解释、答案或总结。",
+      "逐元素对应；保持题号、小问、章节、图表引用、数字及单位，不合并或遗漏元素。",
+      "⟦F:asset_id⟧ 是不可修改、不可复制、不可遗漏的公式对象；只读公式上下文不可输出。",
+      "遵守冻结术语表。新术语只在 proposed_terms 中提议，不改变本批统一规则。",
+      "可依中文语序调整句子，不删减内容，不通过压缩或填充文字迎合原页面长度。",
+      "context_before、context_after、completed_context 均只读，不重新翻译或放入 translations。"
+    ],
+    "reviews": [
+      {
+        "id": "r01",
+        "source": "Only when a packet is signed may it be forwarded.",
+        "translation": "数据包只有签名后才可转发。"
+      },
+      {
+        "id": "r02",
+        "source": "Only when a packet is signed may it be forwarded.",
+        "translation": "数据包只要有签名就可以转发。"
+      },
+      {
+        "id": "r03",
+        "source": "For every request there exists a worker that handles it.",
+        "translation": "每个请求都有处理它的工作进程。"
+      },
+      {
+        "id": "r04",
+        "source": "For every request there exists a worker that handles it.",
+        "translation": "存在一个工作进程处理所有请求。"
+      },
+      {
+        "id": "r05",
+        "source": "Not every graph in this set is connected.",
+        "translation": "该集合中的图并非全都连通。"
+      },
+      {
+        "id": "r06",
+        "source": "Not every graph in this set is connected.",
+        "translation": "该集合中的图全都不连通。"
+      },
+      {
+        "id": "r07",
+        "source": "The procedure succeeds if and only if both checks pass.",
+        "translation": "该过程成功当且仅当两项检查都通过。"
+      },
+      {
+        "id": "r08",
+        "source": "The procedure succeeds if and only if both checks pass.",
+        "translation": "只有两项检查都通过，该过程才会成功。"
+      },
+      {
+        "id": "r09",
+        "source": "An archive contains 3.7 million sensor records in 4 groups.",
+        "translation": "档案包含分为4组的370万条传感记录。"
+      },
+      {
+        "id": "r10",
+        "source": "An archive contains 3.7 million sensor records in 4 groups.",
+        "translation": "档案包含分为4组的370亿条传感记录。"
+      },
+      {
+        "id": "r11",
+        "source": "The two manuscripts date from the eleventh and twelfth centuries, respectively.",
+        "translation": "两份手稿分别出自十一、十二世纪。"
+      },
+      {
+        "id": "r12",
+        "source": "The two manuscripts date from the eleventh and twelfth centuries, respectively.",
+        "translation": "两份手稿分别出自十五、十二世纪。"
+      },
+      {
+        "id": "r13",
+        "source_fragments": [
+          "The loop may change values of variables that are part of the",
+          "condition. It may execute 0 times."
+        ],
+        "translation_fragments": [
+          "循环可能改变条件中变量的值。",
+          "它可能执行0次。"
+        ],
+        "review_fragments_together": true
+      },
+      {
+        "id": "r14",
+        "source_fragments": [
+          "The loop may change values of variables that are part of the",
+          "condition. It may execute 0 times."
+        ],
+        "translation_fragments": [
+          "循环不会改变条件中变量的值。",
+          "它至少执行1次。"
+        ],
+        "review_fragments_together": true
+      }
+    ],
+    "translation_tasks": [
+      {
+        "id": "t01",
+        "source": "Use a direct proof to show that the sum of two odd integers is even."
+      },
+      {
+        "id": "t02",
+        "source": "Let ⟦F:t02-m⟧ and ⟦F:t02-n⟧ be two integers. Prove that ⟦F:t02-s⟧ is even when both integers are odd."
+      },
+      {
+        "id": "t03",
+        "source": "The loop may execute 0 times. Not every request succeeds."
+      },
+      {
+        "id": "t04",
+        "source": "An archive contains 3.7 million sensor records. The sample covers 4 groups."
+      }
+    ],
+    "protected_assets_readonly": {
+      "t02-m": "m",
+      "t02-n": "n",
+      "t02-s": "m+n"
+    },
+    "required_response": {
+      "run_id": "a25bd0b8ef02458b98d6e7a2f08f431b",
+      "reviews": "mapping each review ID to {passed: boolean, issues: string[]}; passing issues must be empty",
+      "translations": "mapping each translation task ID to its Chinese text"
+    }
+  },
+  "gold_not_sent_to_models": {
+    "r01": true,
+    "r02": false,
+    "r03": true,
+    "r04": false,
+    "r05": true,
+    "r06": false,
+    "r07": true,
+    "r08": false,
+    "r09": true,
+    "r10": false,
+    "r11": true,
+    "r12": false,
+    "r13": true,
+    "r14": false
+  },
+  "scope": "14 semantic decisions plus 4 short translations; not a textbook or market benchmark",
+  "source_material": "entirely self-authored; no textbook excerpts",
+  "models": [
+    "auto/deepseek-flash",
+    "auto/glm-5.3-flash",
+    "auto/glm-5.3",
+    "auto/gpt-6.1-sol",
+    "auto/gpt-6-astra",
+    "auto/kimi-k3"
+  ]
+}

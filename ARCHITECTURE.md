@@ -45,3 +45,11 @@ Immutable sources bind the whole original PDF hash and stat identity. Mutable in
 Translation requests contain at most six complete element IDs, preserving contiguous source groups and the full canonical task identity. Neighbouring source units are read-only context. Explicit truncation splits groups where possible; a truncated singleton or oversized indivisible group remains pending. A task has a hard limit of 128 requests including inline review. Successful partial packets do not spend another packet's retry budget. Store versions, leases and semantic result bindings continue to govern every write.
 
 Provider `thinking` and `reasoning_effort` are opt-in request fields. Omission preserves the prior request body. A provider may reject unsupported explicit options. No inference mode is enabled globally by this release, and a small latency probe does not establish full-book quality, cost or speed.
+
+## Explicit review extensions (experimental)
+
+`numeric_policy.py` adds per-element, source-bound Decimal quantity, bibliography-date and named-month policies. The policy and implementation hash enter canonical tasks, read-only context and rule identities; unconfigured elements retain the previous protocol. Ambiguous syntax remains rejected. Numeric equivalence does not replace semantic review.
+
+`semantic_units.py` validates an explicit two-member adjacent-page prose registry, actual source ordinals, intervening headers, context, source-root assets and current translation revisions. `UnitReviewStore` stores whole-unit verdicts separately, preserves caller transaction boundaries and never synthesizes individual passing reviews. Authorized failure resolution is exact and transactional.
+
+`semantic_unit_runner.py` schedules complete units and ordinary reviews under one bounded executor, limiter and stop signal. Explicit `unit_ids` suppress unrelated ordinary reviews; truncation does not split a unit. Requests and commits check both dependency identity and the current result version. See [usage and limitations](docs/EXPLICIT_REVIEW.md).

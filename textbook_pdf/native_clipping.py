@@ -131,16 +131,145 @@ def _point_delta(a,b):
     return max(abs(float(a[n])-float(b[n])) for n in (0,1))
 
 
+def _font_resource_indices(reported_name, resource_names):
+    """Exact full PostScript identity first; only genuine 31-char reports may prefix.
+
+    Callers supply the original rawdict/trace name, never _font_name()'s
+    artificially truncated output. Matching names only selects resources;
+    program identity/missing-program rejection remains the caller's job.
+    """
+    short = str(reported_name).split('+')[-1]
+    normalized = lambda value: re.sub(r'[^a-z0-9]', '', str(value).split('+')[-1].lower())
+    reported = normalized(short)
+    if not reported:
+        return []
+    names = [normalized(value) for value in resource_names]
+    exact = [i for i, value in enumerate(names) if value == reported]
+    if exact:
+        return exact
+    selected = [i for i, value in enumerate(names)
+                if len(short) == 31 and len(value) > len(reported) and value.startswith(reported)]
+    # MuPDF can truncate the original name to31 *before* removing a six-letter
+    # subset tag. Then a genuine31 report appears as24 characters in rawdict.
+    # Match that exact reproduced representation, never any short prefix.
+    for i, value in enumerate(resource_names):
+        value = str(value)
+        if (re.match(r'^[A-Z]{6}\+', value) and len(value) > 31
+                and normalized(value[:31]) == reported and i not in selected):
+            selected.append(i)
+    return selected
+
+
+def _embedded_postscript_names(data):
+    """Read identity metadata only; bounded SFNT nameID6 or CFF1 NameINDEX.
+
+    No outline interpretation, font substitution, Type1 guessing or TTC face
+    selection. Malformed/unsupported metadata supplies no identity evidence.
+    """
+    def number(offset, size, end):
+        if offset < 0 or size < 1 or offset+size > end:
+            raise ValueError('font_metadata_out_of_bounds')
+        return int.from_bytes(data[offset:offset+size], 'big')
+    def valid(value):
+        return (value and all(33 <= ord(c) <= 126 and c not in '[](){}<>/%' for c in value))
+    try:
+        if not data or len(data) < 4:
+            return ()
+        values=set()
+        if data[:4] in (b'\x00\x01\x00\x00', b'OTTO', b'true', b'typ1'):
+            tables=number(4,2,len(data))
+            if not 1 <= tables <= 4096 or 12+16*tables > len(data):
+                return ()
+            name_tables=[]
+            for i in range(tables):
+                off=12+16*i
+                if data[off:off+4] == b'name':
+                    start=number(off+8,4,len(data));size=number(off+12,4,len(data))
+                    if size < 6 or start+size > len(data):
+                        return ()
+                    name_tables.append((start,start+size))
+            if len(name_tables) != 1:
+                return ()
+            start,end=name_tables[0]
+            if number(start,2,end) not in (0,1):
+                return ()
+            count=number(start+2,2,end);strings=start+number(start+4,2,end)
+            if count > 4096 or start+6+12*count > end or not start+6+12*count <= strings <= end:
+                return ()
+            for i in range(count):
+                pos=start+6+12*i
+                if number(pos+6,2,end) != 6:
+                    continue
+                platform=number(pos,2,end);size=number(pos+8,2,end);offset=strings+number(pos+10,2,end)
+                if offset < strings or offset+size > end:
+                    return ()
+                raw=data[offset:offset+size]
+                if platform in (0,3):
+                    value=raw.decode('utf-16-be')
+                elif platform == 1:
+                    value=raw.decode('mac_roman')
+                else:
+                    return ()
+                if not valid(value):
+                    return ()
+                values.add(value)
+        elif data[0] == 1:
+            start=data[2]
+            if start < 4 or start+2 > len(data):
+                return ()
+            count=number(start,2,len(data))
+            if not 1 <= count <= 256:
+                return ()
+            width=number(start+2,1,len(data))
+            if not 1 <= width <= 4:
+                return ()
+            index=start+3;base=index+width*(count+1)
+            offsets=[number(index+i*width,width,len(data)) for i in range(count+1)]
+            if offsets[0] != 1 or any(a > b for a,b in zip(offsets,offsets[1:])) or base+offsets[-1]-1 > len(data):
+                return ()
+            for a,b in zip(offsets,offsets[1:]):
+                value=data[base+a-1:base+b-1].decode('ascii')
+                if not valid(value):
+                    return ()
+                values.add(value)
+        return tuple(sorted(values))
+    except (ValueError,IndexError,UnicodeError,TypeError,OverflowError):
+        return ()
+
+
+def _font_program_candidates(reported_name, resource_names, loader):
+    """Keep named matches strict; otherwise require exact real PS metadata.
+
+    ``loader(index)`` returns actual program bytes. The native-ink caller routes
+    it through its existing per-document/xref cache, never a second extractor.
+    A BaseFont exact/matching resource with missing or distinct programs remains
+    a failure; unrelated metadata cannot silently override that evidence.
+    """
+    names=tuple(resource_names)
+    selected=_font_resource_indices(reported_name,names)
+    if selected:
+        return [(i,loader(i)) for i in selected]
+    identity=lambda value:re.sub(r'^[A-Z]{6}\+', '',str(value))
+    reported=identity(reported_name)
+    if not reported:
+        return []
+    result=[]
+    for i in range(len(names)):
+        data=loader(i);postscript=_embedded_postscript_names(data)
+        if len(postscript) == 1 and identity(postscript[0]) == reported:
+            result.append((i,data))
+    return result
+
+
 def _embedded_font_sha(page,name):
     identities=set()
     # PDF BaseFont can contain the spaced family name, while rawdict/trace
     # reports a compact (and possibly 31-character-truncated) PostScript name.
     # Ambiguous programs remain rejected even when their names share a prefix.
-    normalized=lambda value:re.sub(r'[^a-z0-9]','',value.split('+')[-1].lower())
-    reported=normalized(_font_name(name))
-    for record in page.get_fonts(full=True):
-        if not reported or not normalized(record[3]).startswith(reported):continue
-        program=page.parent.extract_font(record[0])[3]
+    records=page.get_fonts(full=True)
+    candidates=_font_program_candidates(name,[record[3] for record in records],
+        lambda index:page.parent.extract_font(records[index][0])[3])
+    for index,program in candidates:
         if not program:raise ValueError('embedded_font_program_unavailable')
         identities.add(hashlib.sha256(program).hexdigest())
     if len(identities)!=1:raise ValueError('embedded_font_program_ambiguous')

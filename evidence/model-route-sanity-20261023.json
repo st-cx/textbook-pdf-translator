@@ -1,0 +1,26 @@
+{
+  "recorded_on": "2026-10-23",
+  "scope": "One request per user-provided local gateway route; 14 self-authored semantic decisions and 4 short translations. Not a textbook, vendor, market or statistical benchmark.",
+  "corpus_sha256": "e1a01db4f52b0965b9e78274a5e6b735dd740381222a83572b11861acc22461d",
+  "independent_review_sha256": "a68916183b1591f2489e64be80af9abaae9672772673d92611db32ef9a15214a",
+  "api_requests": 6,
+  "textbook_content_sent": false,
+  "configuration_changed": false,
+  "results": [
+    {"requested_route": "auto/deepseek-flash", "http_error": null, "semantic_decisions_correct": 14, "semantic_decisions_total": 14, "translations_structurally_passed": 4, "translations_independently_read": 4, "translation_semantic_failures_found": 0, "request_seconds": 37.696},
+    {"requested_route": "auto/glm-5.3-flash", "http_error": null, "semantic_decisions_correct": 14, "semantic_decisions_total": 14, "translations_structurally_passed": 4, "translations_independently_read": 4, "translation_semantic_failures_found": 0, "request_seconds": 38.940},
+    {"requested_route": "auto/glm-5.3", "http_error": null, "semantic_decisions_correct": 14, "semantic_decisions_total": 14, "translations_structurally_passed": 4, "translations_independently_read": 4, "translation_semantic_failures_found": 0, "request_seconds": 63.643},
+    {"requested_route": "auto/gpt-6.1-sol", "http_error": null, "semantic_decisions_correct": 14, "semantic_decisions_total": 14, "translations_structurally_passed": 4, "translations_independently_read": 4, "translation_semantic_failures_found": 0, "request_seconds": 20.896},
+    {"requested_route": "auto/gpt-6-astra", "http_error": null, "semantic_decisions_correct": 14, "semantic_decisions_total": 14, "translations_structurally_passed": 4, "translations_independently_read": 4, "translation_semantic_failures_found": 0, "request_seconds": 13.116},
+    {"requested_route": "auto/kimi-k3", "http_error": 400, "semantic_decisions_correct": null, "translations_independently_read": 0, "request_seconds": 14.098}
+  ],
+  "successful_route_count": 5,
+  "actual_translation_outputs_reviewed": 20,
+  "minor_wording_notes": "Some translations repeat the word proof; no mathematical error found in the 20 returned short translations.",
+  "actual_response_model_recorded": false,
+  "gateway_error_response_body_recorded": false,
+  "http_400_cause": "unavailable; no inference about balance, route health in general or model quality",
+  "pricing": "unknown; no free-use or cost-ranking claim",
+  "full_book_model_choice_proven": false,
+  "competitor_leadership_established": false
+}

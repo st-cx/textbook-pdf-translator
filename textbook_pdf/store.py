@@ -13,6 +13,8 @@ from pathlib import Path
 
 from .models import Book, Element, RULES_VERSION, SCHEMA_VERSION, digest, validate_translation, TOKEN_RE, protected_asset_descriptor
 
+from .numeric_policy import numeric_policy_fields, frozen_policy_matches
+
 RULE_HASH_SCHEMA='protected-assets-v2'
 
 
@@ -24,6 +26,7 @@ def translation_rule_hash(book,element,glossary,legacy=False,schema=None):
         value['protected_assets']={aid:(protected_asset_descriptor(book.assets[aid],
             include_render_metadata=schema!='protected-assets-v1') if aid in book.assets
             else {'missing':True}) for aid in sorted(ids)}
+    value.update(numeric_policy_fields(element))
     return digest(value)
 
 
@@ -247,6 +250,8 @@ class Store:
         context=[entry for key in ('context_before','context_after') for entry in payload.get(key,[])]
         if any(entry.get('id') not in self._elements or entry.get('source_hash')!=self._elements[entry['id']].source_hash for entry in context):
             raise ValueError('任务只读上下文已改变，拒绝旧结果')
+        if any(not frozen_policy_matches(entry,self._elements[entry['id']]) for entry in frozen+context):
+            raise ValueError('任务或只读上下文的数量级规则已改变，拒绝旧结果')
         related=expected|{entry['id'] for entry in context}
         for eid in related:
             current=self.db.execute('SELECT source_hash,rule_hash FROM elements WHERE id=?',(eid,)).fetchone()

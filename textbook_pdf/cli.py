@@ -111,6 +111,13 @@ def _source_preflight(book, outdir):
             **{k:report.get(k) for k in ('eligible_assets','checked_assets','passed_assets','missing_glyph_assets','unverifiable_assets')}}
 
 
+def _review_run_options(args):
+    options={}
+    if args.review_unit_id is not None:options['unit_ids']=args.review_unit_id
+    if args.max_review_units is not None:options['max_units']=args.max_review_units
+    return options
+
+
 def main(argv=None):
     ap=argparse.ArgumentParser(description='大型教材 PDF 翻译与中文重排：公式保护、统一字号、原书页码标记')
     ap.add_argument('pdf',nargs='?',help='原书 PDF')
@@ -123,6 +130,8 @@ def main(argv=None):
     ap.add_argument('--scan-corrections',help='绑定原书与扫描图像哈希的人工OCR/区域修正JSON，仅分析阶段使用')
     ap.add_argument('--config',default=str(Path(__file__).resolve().parent.parent/'config.json'))
     ap.add_argument('--provider');ap.add_argument('--review-provider')
+    ap.add_argument('--review-unit-id',action='append',help='仅复核指定的显式跨页语义单元；可重复提供，允许明确重审当前退回单元')
+    ap.add_argument('--max-review-units',type=int,help='本次最多复核的完整跨页语义单元数；不会拆成逐元素请求')
     ap.add_argument('--workers',type=int,default=4)
     ap.add_argument('--target-chars',type=int,help='准备任务时的目标原文长度，默认沿用任务目录记录或2400')
     ap.add_argument('--max-tasks',type=int,help='本次最多处理的任务数，便于样章费用测量')
@@ -141,6 +150,8 @@ def main(argv=None):
     if args.target_chars is not None and args.target_chars<200:ap.error('--target-chars 不得小于200')
     stage='layout' if args.assemble_only else 'prepare' if args.dump else args.stage
     if args.estimate:stage='prepare'
+    if args.max_review_units is not None and args.max_review_units<0:ap.error('--max-review-units 必须非负')
+    if (args.review_unit_id is not None or args.max_review_units is not None) and stage!='review':ap.error('语义单元复核选项仅用于 --stage review')
     if not args.pdf and not args.out:ap.error('请指定原书 PDF 或已有任务目录 --out')
     pdf=Path(args.pdf).resolve() if args.pdf else None
     out=Path(args.out).resolve() if args.out else pdf.parent/('译文_'+pdf.stem+'_新版')
@@ -227,7 +238,7 @@ def main(argv=None):
             (out/'translation_run.json').write_text(json.dumps(result,ensure_ascii=False,indent=2),encoding='utf-8')
         if (stage=='review' or (stage=='all' and args.review_provider)) and not block_paid:
             from .translation import run_review
-            t=time.perf_counter();result=run_review(book,store,args.config,provider=args.review_provider or args.provider,max_elements=args.max_tasks,workers=args.workers)
+            t=time.perf_counter();result=run_review(book,store,args.config,provider=args.review_provider or args.provider,max_elements=args.max_tasks,workers=args.workers,**_review_run_options(args))
             metrics['review_seconds']=time.perf_counter()-t
             (out/'review_run.json').write_text(json.dumps(result,ensure_ascii=False,indent=2),encoding='utf-8')
         store.reconcile_diagnostics()

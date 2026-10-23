@@ -23,6 +23,8 @@ import uuid
 from .models import (RULES_VERSION, TOKEN_RE, TRANSLATABLE, Book, digest,
                      protected_asset_descriptor, validate_translation)
 
+from .numeric_policy import numeric_policy_fields, frozen_policy_matches
+
 PROTOCOL_VERSION = 2
 TRANSLATION_PACKET_MAX_IDS = 6
 TRANSLATION_TASK_MAX_REQUESTS = 128  # Includes translation and inline review.
@@ -98,7 +100,7 @@ def make_tasks(book: Book, glossary: dict, target_chars: int = 2400) -> list[dic
     for batch in batches:
         start, end = position[batch[0].id], position[batch[-1].id]
         context = lambda seq: [
-            {"id": e.id, "page": e.page, "text": e.text, "source_hash": e.source_hash, "readonly": True}
+            {"id": e.id, "page": e.page, "text": e.text, "source_hash": e.source_hash, "readonly": True, **numeric_policy_fields(e)}
             for e in seq if spans[e.id] == spans[batch[0].id]
         ]
         protected_ids = set()
@@ -120,7 +122,7 @@ def make_tasks(book: Book, glossary: dict, target_chars: int = 2400) -> list[dic
             "elements": [
                 {"id": e.id, "source_hash": e.source_hash, "kind": e.kind,
                  "page": e.page, "text": e.text, "group_id": e.group_id, "chapter": e.chapter,
-                 "table_headers":e.metadata.get('table_headers',[])}
+                 "table_headers":e.metadata.get('table_headers',[]), **numeric_policy_fields(e)}
                 for e in batch
             ],
             "protected_assets_schema": TASK_ASSET_SCHEMA,
@@ -331,7 +333,7 @@ def _chat(provider: Provider, messages: list[dict]) -> tuple[str, dict]:
 
 
 def _risk(element) -> bool:
-    return bool(TOKEN_RE.search(element.text) or element.kind in {"exercise", "table_cell", "figure_label"}
+    return bool(numeric_policy_fields(element) or TOKEN_RE.search(element.text) or element.kind in {"exercise", "table_cell", "figure_label"}
                 or len(element.text) > 1200 or re.search(
                     r"\b(theorem|proof|definition|lemma|corollary|if and only if)\b", element.text, re.I))
 
@@ -383,6 +385,7 @@ def _review_hash_from_digest(element, translation_hash, book, glossary, *, legac
              "rules_version": RULES_VERSION, "style_hash": digest(STYLE_RULES)}
     if not legacy:
         value["review_hash_schema"] = REVIEW_HASH_SCHEMA
+    value.update(numeric_policy_fields(element))
     return digest(value)
 
 
@@ -512,6 +515,11 @@ def _review_snapshot(book, store):
     selected = [e.id for e in book.elements if e.id in accepted and _translatable(e)
                 and (review_selected(e) or e.id in forced)]
     pending = [eid for eid in selected if eid not in passed or eid in failed]
+    if book.profile.get("semantic_review_units"):
+        from .semantic_units import member_ids
+        grouped=member_ids(book)
+        selected=[eid for eid in selected if eid not in grouped]
+        pending=[eid for eid in pending if eid not in grouped]
     return glossary, accepted, elements, selected, pending
 
 
@@ -577,13 +585,17 @@ def review_status(book, store) -> dict:
                 ids["pending"].append(eid)
                 continue
             ids["passed" if eid in passed_ids else "pending"].append(eid)
-    return {"required": len(eligible), "accepted": len(accepted),
+    result = {"required": len(eligible), "accepted": len(accepted),
             **{key: len(ids[key]) for key in ("selected", "passed", "pending", "failed",
                                               "awaiting_translation")},
             "unbound_failure_diagnostics": len(unbound_failures),
             "coverage_complete": not any(ids[key] for key in
                                           ("pending", "failed", "awaiting_translation")),
             "counts_are_current_hash_bound": True, "ids": ids}
+    if book.profile.get("semantic_review_units"):
+        from .semantic_unit_runner import overlay_review_status
+        return overlay_review_status(book,store,result)
+    return result
 
 
 def _semantic_failure_feedback(book, store, ids, glossary):
@@ -631,7 +643,8 @@ def _request_payload(task, requested, accepted, feedback=None):
         payload["context_before"] = context(frozen[max(0, start - 2):start]) if start else payload["context_before"]
         payload["context_after"] = context(frozen[end + 1:end + 3]) if end + 1 < len(frozen) else payload["context_after"]
     payload["completed_context"] = [
-        {"id": e["id"], "source": e["text"], "translation": accepted[e["id"]], "readonly": True}
+        {"id": e["id"], "source": e["text"], "translation": accepted[e["id"]], "readonly": True,
+         **({"numeric_policy": deepcopy(e["numeric_policy"])} if "numeric_policy" in e else {})}
         for e in task["payload"]["elements"] if e["id"] in accepted and e["id"] not in requested
     ]
     return {"task_id": task["id"], "source_hash": task["source_hash"],
@@ -708,6 +721,8 @@ def _current_task(task, book, glossary):
     if any(e["id"] not in elements or e.get("source_hash") != elements[e["id"]].source_hash
            for e in frozen + context):
         return False
+    if any(not frozen_policy_matches(row, elements[row["id"]]) for row in frozen + context):
+        return False
     descriptors = payload["protected_asset_descriptors"]
     required = {aid for e in frozen + context
                 for aid in set(elements[e["id"]].asset_ids) | set(TOKEN_RE.findall(elements[e["id"]].text))}
@@ -753,6 +768,10 @@ def run_translation(book, store, config_path, provider=None, workers=4, review_p
             raise ValueError("Requested task IDs are not current pending work: " + ", ".join(sorted(unavailable)))
         pending = [task for task in pending if task["id"] in task_ids]
     pending = pending if max_tasks is None else pending[:max_tasks]
+    if book.profile.get("semantic_review_units"):
+        from .semantic_units import member_ids
+        if any(set(t["element_ids"]) & member_ids(book) for t in pending):
+            raise ValueError("Opted-in semantic-unit revisions require joint review; automatic fragment retranslation is blocked")
     report = {"provider": None, "review_provider": None, "scheduled": len(pending),
               "task_ids": sorted(task_ids) if task_ids is not None else None,
               "completed": 0, "failed": 0, "skipped_claimed": 0, "cancelled": False, "provider_blocked": None,
@@ -894,7 +913,8 @@ def run_translation(book, store, config_path, provider=None, workers=4, review_p
             packet = {"task_id": task["id"], "source_hash": task["source_hash"],
                       "glossary": glossary, "style_rules": list(STYLE_RULES),
                       "protected_assets": {aid: task["payload"]["protected_assets"][aid] for aid in sorted(assets)},
-                      "elements": [{"id": eid, "source": element_map[eid].text, "translation": candidates[eid]}
+                      "elements": [{"id": eid, "source": element_map[eid].text, "translation": candidates[eid],
+                                    **numeric_policy_fields(element_map[eid])}
                                    for eid in ids],
                       "required_response": {"task_id": task["id"], "source_hash": task["source_hash"],
                                             "reviews": {eid: {"passed": True, "issues": []} for eid in ids}}}
@@ -1246,7 +1266,7 @@ def _run_review_sequential(book, store, config_path, provider, max_elements=None
         bindings={eid:_review_binding(elements[eid],accepted[eid],book,glossary) for eid in ids}
         body = {"rules_version": RULES_VERSION, "glossary": glossary, "style_rules": list(STYLE_RULES),
                 "elements": [{"id": eid, "source": elements[eid].text, "translation": accepted[eid],
-                              "review_hash": bindings[eid]['review_hash']} for eid in ids],
+                              "review_hash": bindings[eid]['review_hash'], **numeric_policy_fields(elements[eid])} for eid in ids],
                 "protected_assets": {aid: {"text": book.assets[aid].text, "sha256": book.assets[aid].sha256}
                                      for aid in assets}}
         source_hash = digest(body)
@@ -1369,13 +1389,18 @@ def _run_review_sequential(book, store, config_path, provider, max_elements=None
     report["elapsed_seconds"] = time.perf_counter() - started
     return report
 
-def run_review(book, store, config_path, provider, max_elements=None, workers=4) -> dict:
+def run_review(book, store, config_path, provider, max_elements=None, workers=4, *, unit_ids=None, max_units=None) -> dict:
     """Review disjoint current IDs with bounded workers and one provider limiter.
 
     Only temporary Book element views are partitioned; Store registration,
     source elements, frozen rules and hash-bound review identities stay intact.
     Interrupts stop future requests and let valid in-flight replies be saved.
     """
+    if book.profile.get("semantic_review_units"):
+        from .semantic_unit_runner import run_review_with_units
+        return run_review_with_units(book,store,config_path,provider,max_elements,workers,unit_ids=unit_ids,max_units=max_units)
+    if unit_ids is not None or max_units is not None:
+        raise ValueError("No explicit semantic-review units are configured")
     started = time.perf_counter()
     if not isinstance(workers, int) or workers < 1 or workers > 32:
         raise ValueError("workers must be between 1 and 32")

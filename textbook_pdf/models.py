@@ -152,6 +152,13 @@ def source_contract_issues(book):
     issues=[]
     duplicates={eid for eid,count in Counter(e.id for e in book.elements).items() if count>1}
     for e in book.elements:
+        if "numeric_policy" in e.metadata:
+            from .numeric_policy import numeric_policy_fields
+            try:
+                numeric_policy_fields(e)
+            except (ValueError, TypeError, KeyError) as error:
+                issues.append({"code":"source_numeric_policy_invalid","severity":"error",
+                    "element_id":e.id,"page":e.page,"detail":str(error)})
         if e.id in duplicates:
             issues.append({'code':'source_duplicate_element','severity':'error','element_id':e.id,'page':e.page,'detail':'原文元素编号重复，不能建立可靠翻译任务'})
         missing=(set(TOKEN_RE.findall(e.text))|set(e.asset_ids))-book.assets.keys()
@@ -180,7 +187,10 @@ def validate_translation(element: Element, translated: str, book: Book | None = 
     # CJK letters border numerals naturally (第5章、1.8节). Unicode \w would
     # incorrectly suppress those numerals and reject otherwise faithful Chinese.
     from .numbers import numeric_fingerprint
-    if numeric_fingerprint(src) != numeric_fingerprint(dst):
+    if "numeric_policy" in element.metadata:
+        from .numeric_policy import policy_number_issues
+        issues.extend(policy_number_issues(element, translated))
+    elif numeric_fingerprint(src) != numeric_fingerprint(dst):
         issue("number_mismatch", "正文数字与原文不一致，需要复核")
     if re.search(r"[A-Za-z]{3,}", src) and not re.search(r"[\u3400-\u9fff]", dst):
         issue("untranslated", "自然语言段落未检测到中文")

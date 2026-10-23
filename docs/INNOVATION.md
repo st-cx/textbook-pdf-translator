@@ -99,8 +99,8 @@
 |---|---|
 | [textbook_pdf/layout.py](../textbook_pdf/layout.py) | `160a4ae95fe77f3eebd088cb0ebd3591b7af0e7d8848321d655b145a83c42213` |
 | [textbook_pdf/templates/book.typ](../textbook_pdf/templates/book.typ) | `81bd5b1b2cb7cb6e2879618170d772e99776816c3cb60468c028fe27904b445e` |
-| [textbook_pdf/store.py](../textbook_pdf/store.py) | `a04b81800205a903e546a304baa00ab7881b0bbb536e10d331d8c4265313fd85` |
-| [textbook_pdf/translation.py](../textbook_pdf/translation.py) | `c9c55f54f76be568f47ad0ba1aea0936c88ea07220015190ef03da87896d0b5e` |
+| [textbook_pdf/store.py](../textbook_pdf/store.py) | `5ecbef04cf2c1aa205d98e492732d2aafd0d3f03ea4549a1c4a3547844e86d31` |
+| [textbook_pdf/translation.py](../textbook_pdf/translation.py) | `b6582cfaa530986079aec5bc26167c0a166ec7ff24a252e9a3ff0409b3c02eee` |
 | [textbook_pdf/scan_adapter.py](../textbook_pdf/scan_adapter.py) | `59dd267550f498d4a99d334858a5bc3ba26df3e5c78ab7d5656fe896bca94863` |
 | [textbook_pdf/qa.py](../textbook_pdf/qa.py) | `e7dc501309bcd8cc3b13f43edf3aa59e47e824da570a83391b8cae5fe088c592` |
 

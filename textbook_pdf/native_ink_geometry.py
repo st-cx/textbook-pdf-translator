@@ -14,7 +14,7 @@ import re
 import unicodedata
 
 import pymupdf as fitz
-from .native_clipping import record_native_text_operators, _font_name, _raw_glyphs, verify_selected_native_glyphs
+from .native_clipping import record_native_text_operators, _font_name, _raw_glyphs, verify_selected_native_glyphs, _font_resource_indices, _font_program_candidates
 
 SCALE = 8
 
@@ -200,8 +200,13 @@ def _measure(cache, index, glyph, source_glyphs,document):
     matrix = operator['effective_matrix']
     if not all(math.isfinite(n) for n in matrix) or abs(matrix[0]*matrix[3]-matrix[1]*matrix[2]) < 1e-12:
         raise ValueError('nonfinite_or_singular_native_matrix')
-    reported = _name(glyph['font'])
-    resources = [_program(cache,document,p) for p in index['programs'] if reported and _name(p['name']).startswith(reported)]
+    loaded={}
+    def load_resource(i):
+        if i not in loaded:
+            loaded[i]=_program(cache,document,index['programs'][i])
+        return loaded[i]['data']
+    selected_resources=_font_program_candidates(glyph['font'],[p['name'] for p in index['programs']],load_resource)
+    resources=[loaded[i] for i,_ in selected_resources]
     if not resources or any(not p['sha256'] for p in resources):
         raise ValueError('original_embedded_font_program_unavailable')
     identities = {p['sha256'] for p in resources}

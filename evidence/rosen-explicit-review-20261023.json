@@ -1,0 +1,35 @@
+{
+  "recorded_on": "2026-10-23",
+  "source_snapshot": "source-v58",
+  "scope": "Two explicit continuous cross-page prose units and three original-checked minimal wording repairs; no textbook text or assets published.",
+  "unit_execution": {
+    "requested_model_route": "auto/gpt-6-astra",
+    "response_model_recorded": false,
+    "api_calls": 2,
+    "units_passed": 2,
+    "units_failed": 0,
+    "unit_results_cas_applied": 2,
+    "source_assets_individually_checked": 6,
+    "source_asset_native_checks_passed": 6,
+    "individual_semantic_passes_synthesized": 0,
+    "old_failure_rows_exactly_resolved": 2,
+    "unrelated_source_issues_retained": 2,
+    "receipt_sha256": "b6ad0eec0734f88dcc48bd02efeb5adac47569613eb256d0bbdf879d4acf0b80"
+  },
+  "wording_repairs": {
+    "cases": 3,
+    "scope": "Two example-vs-requirement qualifiers and one binary-value wording.",
+    "source_structure_changes": 0,
+    "normal_versioned_submissions": 3,
+    "independent_review_passed": 3,
+    "review_api_calls": 1,
+    "requested_model_route": "auto/glm-5.3-flash",
+    "response_model_recorded": false,
+    "receipt_sha256": "f580ba57c8915981bc665668d46973c8c7552ad96db82857f3c0451cc495cafe",
+    "historical_versions_preserved": true
+  },
+  "pricing_known": false,
+  "zero_estimate_means_free": false,
+  "whole_book_accepted": false,
+  "competitor_ranking_established": false
+}
