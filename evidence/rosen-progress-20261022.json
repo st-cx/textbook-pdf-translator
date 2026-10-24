@@ -1,59 +1,59 @@
 {
-  "schema_version": 4,
+  "schema_version": 5,
   "recorded_on": "2026-10-24",
-  "recorded_at_utc": "2026-10-24T08:45:47.686558+00:00",
-  "source_snapshot": "source-v68",
-  "registered_source_snapshot": "source-v68",
-  "source_book_sha256": "b280009aabd0da06a681e5b209d8a98ba774984238e2a419c5387daa05800d02",
+  "recorded_at_utc": "2026-10-24T10:25:50.827841+00:00",
+  "source_snapshot": "source-v69",
+  "registered_source_snapshot": "source-v69",
+  "source_book_sha256": "ec372b3a7a5f557114f2210abf3fec5e290f24491b4edc85498d2297d96f69f5",
   "source_pdf_sha256": "cdf36691e43fef9c7f7140daea5e99c0f65d3af772136c64e9bd31a8a5b1d65c",
-  "source_contract_sha256": "7a7d85eb516c3a9159ac96d3bfca93630b8e623dc24efd92e8d5e1a7a02d6e2b",
+  "source_contract_sha256": "2aa1f2a73a4997a213dd0d347b222222e40a8b00abef7ed5a3945e6f82ee46b6",
   "scope": "One current read transaction; private textbook processing aggregates, not a public benchmark.",
   "source_physical_pages": 1118,
   "source_elements": 42951,
-  "source_assets_including_archived": 71402,
-  "required_translations": 28605,
-  "current_contract_accepted_translations": 12967,
-  "current_accepted_rows_including_preserved_elements": 13813,
+  "source_assets_including_archived": 71442,
+  "required_translations": 28582,
+  "current_contract_accepted_translations": 13104,
+  "current_accepted_rows_including_preserved_elements": 13950,
   "semantic_review_current_contract": {
-    "required": 28605,
-    "accepted": 12967,
-    "selected": 21284,
-    "passed": 3748,
-    "pending": 4756,
-    "failed": 15,
-    "awaiting_translation": 12765,
+    "required": 28582,
+    "accepted": 13104,
+    "selected": 21272,
+    "passed": 3878,
+    "pending": 4722,
+    "failed": 13,
+    "awaiting_translation": 12659,
     "coverage_complete": false,
     "counts_are_current_hash_bound": true
   },
   "joint_argument_review_counts": {
-    "pending": 3,
-    "passed": 1,
+    "pending": 0,
+    "passed": 4,
     "failed": 0,
     "awaiting_translation": 0,
     "unverifiable": 0
   },
   "cross_page_semantic_review_counts": {
-    "pending": 2,
+    "pending": 3,
     "passed": 0,
     "failed": 0,
     "awaiting_translation": 1,
     "unverifiable": 0
   },
   "current_task_states": {
-    "done": 673,
-    "pending": 1344,
+    "done": 681,
+    "pending": 1327,
     "failed": 6,
     "partial": 1
   },
-  "source_blocking_issues": 2228,
-  "source_blocking_pages": 570,
+  "source_blocking_issues": 2196,
+  "source_blocking_pages": 564,
   "source_blocking_codes": {
     "formula_boundary_review": 464,
     "formula_atomic_boundary_review": 348,
     "source_display_math_fragmented": 16,
     "source_word_fragment_unresolved": 1,
     "formula_crop_contamination": 11,
-    "source_native_ink_geometry_risk": 1120,
+    "source_native_ink_geometry_risk": 1080,
     "source_native_ink_geometry_unverified": 118,
     "source_legacy_asset_alias_unverified": 4,
     "source_unprotected_math_subscripts": 1,
@@ -61,14 +61,16 @@
     "source_unprotected_numeric_power_review": 116,
     "source_translatable_prose_inside_protected_math_asset": 3,
     "source_unprotected_math_range_scope": 1,
-    "source_multicolumn_question_order_hold": 9,
+    "source_multicolumn_question_order_hold": 8,
     "source_unprotected_fraction_numerator_hold": 8,
     "source_crosspage_mainbody_proof_context_hold": 1,
     "source_biography_photo_credit_partition_hold": 1,
     "source_crosspage_complete_exercise41_partition_hold": 1,
     "source_exercise46_48_complete_unit_context_hold": 1,
     "source_crosspage_complete_exercise6_context_hold": 1,
-    "source_math_clause_flow_review": 2
+    "source_math_clause_flow_review": 2,
+    "source_complete_unit_flow_hold": 8,
+    "source_complete_page_flow_hold": 1
   },
   "source_warning_count": 1979,
   "source_warning_codes": {
@@ -87,7 +89,7 @@
     "selected_source_glyphs": 279187,
     "extra_extracted_glyphs_not_certified": 652
   },
-  "native_audit_sha256": "48c39494b26450d9542047179107d0bdf126bedf1958f0c579d4b4d4c3d977ee",
+  "native_audit_sha256": "1794d6be3542f4901ebce75f95238465647f01098f110a8a9a06c4ef4bc64136",
   "source_page_labels": {
     "checked_pages": 1118,
     "printed_labels_supported": 1100,
@@ -101,16 +103,16 @@
   "competitor_leadership_established": false,
   "private_materials_published": false,
   "local_source_regressions": {
-    "counted": 952,
-    "passed": 935,
+    "counted": 957,
+    "passed": 940,
     "skipped": 17,
     "failures": 0,
     "errors": 0,
-    "seconds": 43.681,
+    "seconds": 49.505,
     "hosted_ci": false
   },
-  "regression_evidence": "source-regressions-20261024-complete-source-holds-v1.json",
-  "source_integration": {
+  "regression_evidence": "source-regressions-20261024-math-term-wrap-v1.json",
+  "source68_historical_integration": {
     "registered_from": "source-v66",
     "verified_frozen_intermediate": "source-v67",
     "source67_changed_existing_elements": 219,
@@ -139,33 +141,98 @@
     "old_semantic_passes_copied": 0,
     "limitation": "Finite source and exact local native-ink integration only. Explicit hold membership is not proof of exhaustive source-scope detection; additional known page exclusions remain. These counts do not certify full formulas, Chinese pages or whole-book quality."
   },
+  "source_integration": {
+    "registered_from": "source-v68",
+    "source69_changed_existing_elements": 59,
+    "source69_new_elements": 0,
+    "source69_new_native_assets": 40,
+    "source69_metadata_only_asset_archives": 40,
+    "source69_exact_glyph_row_changes": 1260,
+    "source69_owner_only_moves": 1188,
+    "source69_disposition_changes": 0,
+    "source69_exact_order_windows": 3,
+    "source69_existing_IDs_in_order_windows": 58,
+    "source69_complete_p608_questions_restored": 8,
+    "source69_new_cross_page_semantic_unit_definitions": 1,
+    "source69_exact_blue_background_ink_gates_closed": 40,
+    "source69_blue_saved_source_glyphs": 72,
+    "source69_blue_nonspace_native_glyphs": 68,
+    "source69_exact_column_order_holds_closed": 1,
+    "source69_exact_new_source_holds": 9,
+    "source69_all_saved_elements_checked": 42951,
+    "source69_all_saved_assets_checked": 71442,
+    "source69_all_ordered_glyph_rows_checked": 3585833,
+    "source69_actual_asset_files_hashed": 11343,
+    "source69_explicit_all_hold_members_excluded_from_body_and_context": true,
+    "source69_remaining_ordinary_ink_gates": 1198,
+    "existing_panels_preserved": 9,
+    "new_panel_definitions": 22,
+    "short_single_line_right_padding_design_reconstructions": 7,
+    "new_22_Chinese_panels_accepted": false,
+    "p415_whole_page_source_hold_retained": true,
+    "old_semantic_passes_copied": 0,
+    "limitation": "Exact finite source and local native-ink restoration only; full formulas, all Chinese panels, source risk exhaustiveness and the whole book remain unaccepted."
+  },
   "last_finished_batch": {
-    "source_generation": "source-v66",
-    "selected_tasks": 26,
-    "initial_missing_elements": 245,
+    "source_generation": "source-v68",
+    "selected_tasks": 17,
+    "initial_missing_elements": 142,
     "initial_missing_outcomes": {
-      "accepted": 243,
-      "missing_or_stale": 2
+      "accepted": 142
     },
     "current_selected_task_states": {
-      "done": 24,
-      "pending": 2
+      "done": 16,
+      "pending": 1
     },
-    "actual_completion_requests": 163,
-    "actual_requests_by_provider": {
-      "magpie": 75,
-      "magpie-review": 88
-    },
-    "requests_with_unknown_usage": 21,
-    "later_source_registration_can_invalidate_accepted_rows": true
+    "actual_completion_requests": 84,
+    "requests_with_unknown_usage": 1,
+    "statuses_before_later_minimum_wording_correction": true,
+    "later_source_registration_can_invalidate_accepted_rows": true,
+    "eight_new_source_flow_holds_preserved": true,
+    "extra_joint_argument_requests_outside_finite_task_set": 3,
+    "extra_joint_verdicts_not_part_of_the17_task_finite_coverage": true,
+    "actual_requests_by_role": {
+      "translation": 40,
+      "independent_review": 44
+    }
   },
-  "two_committee_count_wording_corrections": {
-    "source_generation": "source-v66",
-    "exact_translations": 2,
-    "fresh_independent_strong_review_passed": 2,
+  "minimum_qualifier_correction": {
+    "source_generation": "source-v68",
+    "translations_corrected": 1,
+    "fresh_independent_strong_review_passed": 1,
     "actual_review_requests": 1,
     "translation_requests": 0,
+    "other_translation_rows_unchanged": true,
     "whole_page_or_book_accepted": false
+  },
+  "private_finite_review_dispatch_guard": {
+    "actual_synthetic_regressions_passed": 4,
+    "legacy_extra_argument_request_reproduced": true,
+    "fixed_unselected_joint_requests": 0,
+    "fixed_ordinary_review_requests": 1,
+    "live_gateway_requests_in_regressions": 0,
+    "both_joint_protocols_explicitly_disabled_for_future_ordinary_only_batches": true,
+    "scope": "Private coordinator guard; independent of the public source regression total."
+  },
+  "Chinese_math_term_layout_regression": {
+    "new_self_authored_final_PDF_checks": 5,
+    "fixed_role_size_pt": 10.5,
+    "local_current_source_layout_only_pages_directly_viewed": 3,
+    "current_descriptors_and_actual_assets_checked": 42,
+    "object_pixel_occurrences_passed": 42,
+    "QA_errors": 0,
+    "QA_warnings": 2,
+    "BigTheta_literal_baseline_delta_pt": 0.0,
+    "source_labels": [
+      "180",
+      "227",
+      "300"
+    ],
+    "historical_mapped_text_is_not_new_accepted_DB_translation": true,
+    "new_source69_22_panel_acceptance_not_established_by_this_sample": true,
+    "renderer_sha256": "bf204e083d0243c68950e90fdaae3f674d63dffb79b291ae6c315cb32a71528c",
+    "local_PDF_sha256": "eea9085b2841e7bc3f19581aa48f40a967801110d85fbe17b71070ccefe3d66b",
+    "full_book_accepted": false
   },
   "pricing_status": "Gateway prices unknown; zero estimates do not establish free billing."
 }

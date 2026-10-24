@@ -671,6 +671,24 @@ def _display_text_markup(text, element, book, paths, width, issues):
     return '#block(above: 0pt, below: 0pt)[#set par(justify: false, hanging-indent: 0pt)\n' + ''.join(parts) + ']'
 
 
+def _literal_text_markup(value):
+    # A Chinese Landau name is one reading unit. Keep the original characters,
+    # font size and spaces while preventing a break inside the short name.
+    matches = list(re.finditer(r'(?:大[ \u00a0\u3000]{0,2}[OΩΘ]|小[ \u00a0\u3000]{0,2}[oω])(?=$|[^A-Za-z])', value))
+    if not matches:
+        return '#text(' + _q(value) + ')'
+    parts = []
+    position = 0
+    for match in matches:
+        if match.start() > position:
+            parts.append('#text(' + _q(value[position:match.start()]) + ')')
+        parts.append('#box[#text(' + _q(match.group()) + ')]')
+        position = match.end()
+    if position < len(value):
+        parts.append('#text(' + _q(value[position:]) + ')')
+    return ''.join(parts)
+
+
 def _text_markup(text, element, book, paths, width, issues):
     if element.metadata.get('display_asset_ids'):
         return _display_text_markup(text, element, book, paths, width, issues)
@@ -682,7 +700,7 @@ def _text_markup(text, element, book, paths, width, issues):
         if index in skip:
             continue
         if match.start() > position:
-            parts.append("#text(" + _q(text[position:match.start()]) + ")")
+            parts.append(_literal_text_markup(text[position:match.start()]))
         proof = book.assets[match[1]].metadata.get('cross_page_math') if match[1] in book.assets else None
         if proof and index+1 < len(matches):
             following = matches[index+1]
@@ -699,7 +717,7 @@ def _text_markup(text, element, book, paths, width, issues):
         parts.append(_asset_markup(match[1], element.id, book, paths, width, issues))
         position = match.end()
     if position < len(text):
-        parts.append("#text(" + _q(text[position:]) + ")")
+        parts.append(_literal_text_markup(text[position:]))
     return "".join(parts)
 
 
