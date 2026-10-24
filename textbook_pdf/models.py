@@ -154,7 +154,8 @@ def source_error_scope(book):
     An unresolved owner falls back to its page, and a global error blocks all
     selected pages. Malformed scopes fail closed rather than dropping a hold.
     """
-    known = set(book.element_map())
+    elements = book.element_map()
+    known = set(elements)
     blocked_ids, blocked_pages = set(), set()
     for issue in book.issues:
         if issue.get('severity') != 'error':
@@ -176,6 +177,45 @@ def source_error_scope(book):
         blocked_ids.update(ids)
         if not ids or ids - known:
             blocked_pages.update([page] if page is not None else book.selected_pages)
+        # A source repair can retain an old ID as a hidden history shell. Its
+        # unresolved issue must follow the current source owner as well.
+        pending = [(eid, frozenset()) for eid in ids if eid in known]
+        seen = set()
+        while pending:
+            eid, ancestors = pending.pop()
+            if eid in ancestors:
+                raise ValueError('Malformed source archived owner cycle')
+            if eid in seen:
+                continue
+            seen.add(eid)
+            element = elements[eid]
+            meta = element.metadata
+            if 'render_suppressed' in meta and type(meta['render_suppressed']) is not bool:
+                raise ValueError('Malformed source archived owner flag')
+            if not meta.get('render_suppressed', False):
+                continue
+            targets = []
+            if meta.get('superseded_by') is not None:
+                targets.append(meta['superseded_by'])
+            for field, key in (
+                    ('exact_original_source_fragment_archive_v1', 'current_unit_owner'),
+                    ('complete_math_source_owner_archive_v1', 'moved_to_owner')):
+                if field in meta:
+                    if not isinstance(meta[field], dict):
+                        raise ValueError('Malformed source archived owner contract')
+                    if meta[field].get(key) is not None:
+                        targets.append(meta[field][key])
+            if not targets:
+                if type(element.page) is not int or not 1 <= element.page <= book.page_count:
+                    raise ValueError('Malformed source archived owner page')
+                blocked_pages.add(element.page)
+                continue
+            if any(not isinstance(target, str) or not target.strip() or target not in known
+                   for target in targets):
+                raise ValueError('Malformed source archived owner destination')
+            for target in set(targets):
+                blocked_ids.add(target)
+                pending.append((target, ancestors | {eid}))
     return blocked_ids, blocked_pages
 
 

@@ -24,7 +24,7 @@ powershell -ExecutionPolicy Bypass -File .\安装依赖.ps1
 .\.venv\Scripts\python.exe translate_pdf.py "book.pdf" --stage prepare --pages 1-3 --out "sample" --no-legacy-import
 ```
 
-Current local source regressions: **957 tests, 940 passed, 17 optional skips, zero failures/errors**, with matching pre/post source and fixture hashes. This is local validation, not hosted GitHub CI or full-book acceptance. [Bound receipt](evidence/source-regressions-20261024-math-term-wrap-v1.json)
+Current local source regressions: **966 tests, 949 passed, 17 optional skips, zero failures/errors**, with matching pre/post source and fixture hashes. This is local validation, not hosted GitHub CI or full-book acceptance. [Bound receipt](evidence/source-regressions-20261024-archived-source-scope-v1.json)
 
 The earlier 24-page/7-page digital and 3-page unindexed scan samples are historical rc.2 results. Their 796/796 and 421/421 pixel passes compare composed output with the source crops then used, not those crops with the original book. Newly discovered source-crop risks have not been repaired in those historical outputs. The [original authored demo](examples/original-demo) proves known Book/Store structure to composition, not OCR, automatic extraction or translation-model quality.
 

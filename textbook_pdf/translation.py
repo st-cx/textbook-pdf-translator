@@ -59,6 +59,30 @@ def _translatable(element):
     return element.kind in TRANSLATABLE and bool(element.text.strip())
 
 
+def _source_scope_allows_payload(payload, elements, blocked_ids, blocked_pages):
+    """Include distant original argument dependencies in the paid-request gate."""
+    rows = []
+    for key in ('elements', 'context_before', 'context_after'):
+        entries = payload.get(key, [])
+        if not isinstance(entries, list):
+            return False
+        rows.extend(entries)
+    arguments = payload.get('argument_context') or {}
+    if not isinstance(arguments, dict):
+        return False
+    for unit in arguments.values():
+        if not isinstance(unit, dict) or not isinstance(unit.get('ordered_readonly_source'), list):
+            return False
+        rows.extend(unit['ordered_readonly_source'])
+    for row in rows:
+        if not isinstance(row, dict) or not isinstance(row.get('id'), str):
+            return False
+        element = elements.get(row['id'])
+        if element is None or element.id in blocked_ids or element.page in blocked_pages:
+            return False
+    return True
+
+
 def make_tasks(book: Book, glossary: dict, target_chars: int = 2400) -> list[dict]:
     """Create deterministic, complete packets; never cut a paragraph or group.
 
@@ -71,6 +95,7 @@ def make_tasks(book: Book, glossary: dict, target_chars: int = 2400) -> list[dic
         raise ValueError("target_chars must be a positive integer")
     frozen_glossary = dict(sorted((str(k), str(v)) for k, v in glossary.items()))
     blocked_ids, blocked_pages = source_error_scope(book)
+    element_map = book.element_map()
     elements = [e for e in book.elements if _translatable(e) and e.id not in blocked_ids and e.page not in blocked_pages]
     spans, span = {}, 0
     for index, element in enumerate(elements):
@@ -151,6 +176,8 @@ def make_tasks(book: Book, glossary: dict, target_chars: int = 2400) -> list[dic
                     asset=book.assets[aid]
                     payload['protected_asset_descriptors'][aid]=deepcopy(protected_asset_descriptor(asset))
                     payload['protected_assets'][aid]={'text':asset.text,'kind':asset.kind,'sha256':asset.sha256,'readonly':True}
+        if not _source_scope_allows_payload(payload, element_map, blocked_ids, blocked_pages):
+            continue
         source_hash = digest(payload)
         tasks.append({"id": "task-" + source_hash[:24], "element_ids": [e.id for e in batch],
                       "source_hash": source_hash, "payload": payload})
@@ -754,6 +781,9 @@ def _current_task(task, book, glossary):
         expected_argument_context=argument_task_context(book,[row["id"] for row in frozen+context])
     except (ValueError,KeyError,TypeError):return False
     if payload.get("argument_context")!=(expected_argument_context or None):return False
+    blocked_ids, blocked_pages = source_error_scope(book)
+    if not _source_scope_allows_payload(payload, elements, blocked_ids, blocked_pages):
+        return False
     descriptors = payload["protected_asset_descriptors"]
     required = {aid for e in frozen + context
                 for aid in set(elements[e["id"]].asset_ids) | set(TOKEN_RE.findall(elements[e["id"]].text))}

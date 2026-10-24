@@ -103,15 +103,15 @@
   "competitor_leadership_established": false,
   "private_materials_published": false,
   "local_source_regressions": {
-    "counted": 957,
-    "passed": 940,
+    "counted": 966,
+    "passed": 949,
     "skipped": 17,
     "failures": 0,
     "errors": 0,
-    "seconds": 49.505,
+    "seconds": 49.148,
     "hosted_ci": false
   },
-  "regression_evidence": "source-regressions-20261024-math-term-wrap-v1.json",
+  "regression_evidence": "source-regressions-20261024-archived-source-scope-v1.json",
   "source68_historical_integration": {
     "registered_from": "source-v66",
     "verified_frozen_intermediate": "source-v67",
@@ -234,5 +234,24 @@
     "local_PDF_sha256": "eea9085b2841e7bc3f19581aa48f40a967801110d85fbe17b71070ccefe3d66b",
     "full_book_accepted": false
   },
-  "pricing_status": "Gateway prices unknown; zero estimates do not establish free billing."
+  "pricing_status": "Gateway prices unknown; zero estimates do not establish free billing.",
+  "archived_source_scope_guard": {
+    "archived_issue_member_occurrences_examined": 7,
+    "source_pages": [
+      415,
+      1077
+    ],
+    "legacy_owner_references_follow_explicit_current_owners": true,
+    "unknown_destination_retains_original_page_hold": true,
+    "malformed_or_cyclic_destination_rejected": true,
+    "existing_body_and_readonly_argument_source_holds_checked_before_execution": true,
+    "targeted_source_scope_checks_passed": 17,
+    "current_canonical_tasks_rechecked": 2015,
+    "current_canonical_task_IDs_and_payloads_unchanged": true,
+    "current_grammar_owner_is_blocked": true,
+    "temporary_p1077_page_exclusion_already_prevented_dispatch": true,
+    "source_Store_API_writes_in_readback": 0,
+    "source_record_or_translation_reset": false,
+    "full_book_accepted": false
+  }
 }
