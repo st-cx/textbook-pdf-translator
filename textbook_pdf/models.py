@@ -160,7 +160,7 @@ def source_contract_issues(book):
                 issues.append({"code":"source_century_policy_invalid","severity":"error",
                     "element_id":e.id,"page":e.page,"detail":str(error)})
         if "numeric_policy" in e.metadata:
-            from .numeric_policy import numeric_policy_fields
+            from .numeric_policy_dispatch import numeric_policy_fields
             try:
                 numeric_policy_fields(e)
             except (ValueError, TypeError, KeyError) as error:
@@ -178,6 +178,9 @@ def source_contract_issues(book):
         missing=(set(TOKEN_RE.findall(e.text))|set(e.asset_ids))-book.assets.keys()
         if missing:
             issues.append({'code':'source_asset_reference_missing','severity':'error','element_id':e.id,'page':e.page,'detail':'原文引用的受保护对象不存在，须先修复来源记录','asset_ids':sorted(missing)})
+    if book.profile.get("argument_units_v1") or any("argument_member_v1" in e.metadata for e in book.elements) or any(g.get("disposition")=="reconstructed-source-primitive" for p in book.pages for g in p.get("graphics_coverage", [])):
+        from .argument_units import source_issues
+        issues.extend(source_issues(book))
     return issues
 
 
@@ -205,7 +208,7 @@ def validate_translation(element: Element, translated: str, book: Book | None = 
         from .century_policy import century_number_issues
         issues.extend(century_number_issues(element, translated))
     elif "numeric_policy" in element.metadata:
-        from .numeric_policy import policy_number_issues
+        from .numeric_policy_dispatch import policy_number_issues
         issues.extend(policy_number_issues(element, translated))
     elif numeric_fingerprint(src) != numeric_fingerprint(dst):
         issue("number_mismatch", "正文数字与原文不一致，需要复核")

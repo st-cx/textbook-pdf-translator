@@ -23,9 +23,10 @@ import uuid
 from .models import (RULES_VERSION, TOKEN_RE, TRANSLATABLE, Book, digest,
                      protected_asset_descriptor, validate_translation)
 
-from .numeric_policy import numeric_policy_fields, frozen_policy_matches
+from .numeric_policy_dispatch import numeric_policy_fields, frozen_policy_matches
 from .percentage_policy import percentage_policy_fields, frozen_percentage_policy_matches
 from .century_policy import century_policy_fields, frozen_century_policy_matches
+from .argument_units import argument_member_fields, frozen_argument_matches, task_context as argument_task_context
 
 PROTOCOL_VERSION = 2
 TRANSLATION_PACKET_MAX_IDS = 6
@@ -102,7 +103,7 @@ def make_tasks(book: Book, glossary: dict, target_chars: int = 2400) -> list[dic
     for batch in batches:
         start, end = position[batch[0].id], position[batch[-1].id]
         context = lambda seq: [
-            {"id": e.id, "page": e.page, "text": e.text, "source_hash": e.source_hash, "readonly": True, **numeric_policy_fields(e), **percentage_policy_fields(e), **century_policy_fields(e)}
+            {"id": e.id, "page": e.page, "text": e.text, "source_hash": e.source_hash, "readonly": True, **numeric_policy_fields(e), **percentage_policy_fields(e), **century_policy_fields(e), **argument_member_fields(e,book)}
             for e in seq if spans[e.id] == spans[batch[0].id]
         ]
         protected_ids = set()
@@ -124,7 +125,7 @@ def make_tasks(book: Book, glossary: dict, target_chars: int = 2400) -> list[dic
             "elements": [
                 {"id": e.id, "source_hash": e.source_hash, "kind": e.kind,
                  "page": e.page, "text": e.text, "group_id": e.group_id, "chapter": e.chapter,
-                 "table_headers":e.metadata.get('table_headers',[]), **numeric_policy_fields(e), **percentage_policy_fields(e), **century_policy_fields(e)}
+                 "table_headers":e.metadata.get('table_headers',[]), **numeric_policy_fields(e), **percentage_policy_fields(e), **century_policy_fields(e), **argument_member_fields(e,book)}
                 for e in batch
             ],
             "protected_assets_schema": TASK_ASSET_SCHEMA,
@@ -139,6 +140,18 @@ def make_tasks(book: Book, glossary: dict, target_chars: int = 2400) -> list[dic
             "context_before": context(elements[max(0, start - 2):start]),
             "context_after": context(elements[end + 1:end + 3]),
         }
+        argument_context=argument_task_context(book,[row["id"] for row in payload["elements"]+payload["context_before"]+payload["context_after"]])
+        if argument_context:
+            payload["argument_context"]=argument_context
+            # Read-only original premises/conclusion include native objects
+            # beyond the ordinary two-neighbour prose window.
+            for unit in argument_context.values():
+                all_readonly_aids={aid for row in unit['ordered_readonly_source']
+                                   for aid in set(book.element_map()[row['id']].asset_ids)|set(TOKEN_RE.findall(row['text']))}
+                for aid in sorted(all_readonly_aids):
+                    asset=book.assets[aid]
+                    payload['protected_asset_descriptors'][aid]=deepcopy(protected_asset_descriptor(asset))
+                    payload['protected_assets'][aid]={'text':asset.text,'kind':asset.kind,'sha256':asset.sha256,'readonly':True}
         source_hash = digest(payload)
         tasks.append({"id": "task-" + source_hash[:24], "element_ids": [e.id for e in batch],
                       "source_hash": source_hash, "payload": payload})
@@ -390,6 +403,7 @@ def _review_hash_from_digest(element, translation_hash, book, glossary, *, legac
     value.update(numeric_policy_fields(element))
     value.update(percentage_policy_fields(element))
     value.update(century_policy_fields(element))
+    value.update(argument_member_fields(element,book))
     return digest(value)
 
 
@@ -524,6 +538,11 @@ def _review_snapshot(book, store):
         grouped=member_ids(book)
         selected=[eid for eid in selected if eid not in grouped]
         pending=[eid for eid in pending if eid not in grouped]
+    if book.profile.get("argument_units_v1"):
+        from .argument_units import registry
+        grouped={eid for u in registry(book).values()for eid in u["member_ids"]}
+        selected=[eid for eid in selected if eid not in grouped]
+        pending=[eid for eid in pending if eid not in grouped]
     return glossary, accepted, elements, selected, pending
 
 
@@ -598,7 +617,10 @@ def review_status(book, store) -> dict:
             "counts_are_current_hash_bound": True, "ids": ids}
     if book.profile.get("semantic_review_units"):
         from .semantic_unit_runner import overlay_review_status
-        return overlay_review_status(book,store,result)
+        result=overlay_review_status(book,store,result)
+    if book.profile.get("argument_units_v1"):
+        from .argument_review_runner import overlay_argument_status
+        result=overlay_argument_status(book,store,result)
     return result
 
 
@@ -649,7 +671,8 @@ def _request_payload(task, requested, accepted, feedback=None):
     payload["completed_context"] = [
         {"id": e["id"], "source": e["text"], "translation": accepted[e["id"]], "readonly": True,
          **({"numeric_policy": deepcopy(e["numeric_policy"])} if "numeric_policy" in e else {}),
-         **({"century_policy": deepcopy(e["century_policy"])} if "century_policy" in e else {})}
+         **({"century_policy": deepcopy(e["century_policy"])} if "century_policy" in e else {}),
+         **({"argument_policy": deepcopy(e["argument_policy"])} if "argument_policy" in e else {})}
         for e in task["payload"]["elements"] if e["id"] in accepted and e["id"] not in requested
     ]
     return {"task_id": task["id"], "source_hash": task["source_hash"],
@@ -726,11 +749,18 @@ def _current_task(task, book, glossary):
     if any(e["id"] not in elements or e.get("source_hash") != elements[e["id"]].source_hash
            for e in frozen + context):
         return False
-    if any(not frozen_policy_matches(row, elements[row["id"]]) or not frozen_percentage_policy_matches(row, elements[row["id"]]) or not frozen_century_policy_matches(row, elements[row["id"]]) for row in frozen + context):
+    if any(not frozen_policy_matches(row, elements[row["id"]]) or not frozen_percentage_policy_matches(row, elements[row["id"]]) or not frozen_century_policy_matches(row, elements[row["id"]]) or not frozen_argument_matches(row, elements[row["id"]],book) for row in frozen + context):
         return False
+    try:
+        expected_argument_context=argument_task_context(book,[row["id"] for row in frozen+context])
+    except (ValueError,KeyError,TypeError):return False
+    if payload.get("argument_context")!=(expected_argument_context or None):return False
     descriptors = payload["protected_asset_descriptors"]
     required = {aid for e in frozen + context
                 for aid in set(elements[e["id"]].asset_ids) | set(TOKEN_RE.findall(elements[e["id"]].text))}
+    for unit in expected_argument_context.values():
+        required.update(aid for row in unit['ordered_readonly_source']
+                        for aid in set(elements[row['id']].asset_ids)|set(TOKEN_RE.findall(row['text'])))
     if not required <= descriptors.keys():
         return False
     if any(aid not in book.assets or value != protected_asset_descriptor(book.assets[aid])
@@ -1394,13 +1424,18 @@ def _run_review_sequential(book, store, config_path, provider, max_elements=None
     report["elapsed_seconds"] = time.perf_counter() - started
     return report
 
-def run_review(book, store, config_path, provider, max_elements=None, workers=4, *, unit_ids=None, max_units=None) -> dict:
+def run_review(book, store, config_path, provider, max_elements=None, workers=4, *, unit_ids=None, max_units=None, argument_ids=None, max_arguments=None) -> dict:
     """Review disjoint current IDs with bounded workers and one provider limiter.
 
     Only temporary Book element views are partitioned; Store registration,
     source elements, frozen rules and hash-bound review identities stay intact.
     Interrupts stop future requests and let valid in-flight replies be saved.
     """
+    if book.profile.get("argument_units_v1"):
+        from .argument_review_runner import run_review_with_arguments
+        return run_review_with_arguments(book,store,config_path,provider,max_elements,workers,unit_ids=unit_ids,max_units=max_units,argument_ids=argument_ids,max_arguments=max_arguments)
+    if argument_ids is not None or max_arguments is not None:
+        raise ValueError("No explicit argument units are configured")
     if book.profile.get("semantic_review_units"):
         from .semantic_unit_runner import run_review_with_units
         return run_review_with_units(book,store,config_path,provider,max_elements,workers,unit_ids=unit_ids,max_units=max_units)

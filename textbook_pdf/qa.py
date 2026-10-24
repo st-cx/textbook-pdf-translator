@@ -202,6 +202,9 @@ def verify(book, translations, outdir, pdf_path=None, layout_map=None, extra_iss
     outdir=Path(outdir)
     outdir.mkdir(parents=True,exist_ok=True)
     issues=list(book.issues)+list(extra_issues or [])
+    if book.profile.get("argument_units_v1") or any(g.get("disposition")=="reconstructed-source-primitive" for p in book.pages for g in p.get("graphics_coverage",[])):
+        from .argument_units import source_issues
+        issues.extend(source_issues(book))
     scans,scan_issues=scan_source_summary(book,outdir)
     existing_scan_keys={(i.get('code'),i.get('page'),i.get('severity','warning'),i.get('detail')) for i in issues}
     for issue in scan_issues:
@@ -269,6 +272,19 @@ def verify(book, translations, outdir, pdf_path=None, layout_map=None, extra_iss
         layout_map=json.loads((outdir/'layout_map.json').read_text(encoding='utf-8'))
     elif isinstance(layout_map,(str,Path)):
         layout_map=json.loads(Path(layout_map).read_text(encoding='utf-8'))
+    panel_check={'status':'not_applicable'}
+    if book.profile.get('source_design_panels_v1'):
+        try:
+            from .design_panels import check_exact_paint
+            if not pdf_path or not Path(pdf_path).is_file() or not isinstance(layout_map,dict):
+                raise ValueError('Reviewed source panels need the actual composed PDF and its layout map')
+            traces=layout_map.get('source_design_panel_traces')
+            if not isinstance(traces,list):
+                raise ValueError('Reviewed source panel traces are missing')
+            panel_check={'status':'passed',**check_exact_paint(book,pdf_path,traces)}
+        except Exception as error:
+            panel_check={'status':'failed','reason':str(error),'error_type':type(error).__name__}
+            add('source_design_panel_check_failed','原书底色组合的实际成品检查未通过：'+str(error))
     render_revision='not_checked'
     if pdf_path and Path(pdf_path).is_file() and isinstance(layout_map,dict):
         if not layout_map.get('render_binding') or not layout_map.get('pdf_sha256'):
@@ -315,6 +331,15 @@ def verify(book, translations, outdir, pdf_path=None, layout_map=None, extra_iss
                             if reported>=3:break
                     if reported>=3:break
     if layout_map:
+        if book.profile.get("argument_units_v1") and pdf_path and Path(pdf_path).is_file():
+            from .argument_qa import check_argument_layout
+            from .layout import _page_geometry
+            traces=layout_map.get("argument_traces", [])
+            # The map stores argument and complete element traces as a fallback.
+            tracefile=outdir/"typst-traces.json"
+            if tracefile.is_file():traces=json.loads(tracefile.read_text(encoding="utf8"))
+            argument_check=check_argument_layout(book,traces,_page_geometry(book),pdf_path)
+            issues.extend(argument_check["issues"])
         issues.extend(layout_map.get('issues',[]))
         positions=layout_map.get('elements',{})
         assets=layout_map.get('assets',{})
@@ -376,6 +401,7 @@ def verify(book, translations, outdir, pdf_path=None, layout_map=None, extra_iss
     warnings=[i for i in issues if i.get('severity','warning')=='warning']
     report={'schema_version':2,'title':book.title,'source_pages':len(book.selected_pages),'output_pages':page_count,'elements':len(book.elements),'accepted_translations':len(translations),'missing_translations':len(missing),'protected_assets':len(book.assets),'technical_checks_passed':not errors,'acceptance_status':'needs_visual_and_semantic_review' if not errors else 'incomplete','visual_review':'protected_asset_pixels_only' if visual['status']!='not_run' else 'not_claimed','manual_visual_review':'not_claimed','visual_asset_checks':visual,'semantic_review':'see task diagnostics','errors':len(errors),'warnings':len(warnings),'issues':issues}
     report['render_revision']=render_revision
+    report['source_design_panel_checks']=panel_check
     report['scan_source_checks']=scans
     report['native_source_glyph_checks']=native_source
     report['source_pagination_checks']=pagination

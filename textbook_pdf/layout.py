@@ -48,6 +48,12 @@ def rendering_binding(book: Book, translations: dict) -> dict:
     if book.profile.get(PLAN_KEY):
         from . import exercise_flow_adapter
         adapter_identity["exercise_flow_adapter_sha256"] = file_sha256(Path(exercise_flow_adapter.__file__).resolve())
+    if book.profile.get("argument_units_v1"):
+        from .argument_layout import renderer_identity
+        adapter_identity.update(renderer_identity())
+    if book.profile.get("source_design_panels_v1"):
+        from .design_panels import renderer_identity as panel_identity
+        adapter_identity.update(panel_identity())
     return {"schema_version": 1, "source_sha256": book.source_sha256,
             "renderer_identity": {"layout_sha256": file_sha256(Path(__file__).resolve()),
                                   "template_sha256": file_sha256(_TEMPLATE),
@@ -573,7 +579,7 @@ def _margin_attachments(elements, geometry):
     return dict(attachments), attached
 
 
-def _margin_markup(notes, element, texts, book, paths, geometry, width, profile, issues, labels, preview_ids, flow_inset=0):
+def _margin_markup(notes, element, texts, book, paths, geometry, width, profile, issues, labels, preview_ids, flow_inset=0, rail_shift=0):
     # Source x is not the rendered x: a source list can reflow at full width.
     # Reserve a physical 6pt safety margin even when the body has no inset.
     margin_width = min(88.0, geometry["left"] + max(0.0, flow_inset) - 14.0)
@@ -598,7 +604,7 @@ def _margin_markup(notes, element, texts, book, paths, geometry, width, profile,
         size = profile["body_size"] if role == "label" else profile["caption_size"]
         rows.append("[#margin-source((" + ", ".join(identities) + ",), " + _number(margin_width) + "pt, " +
                     _number(size) + "pt)[" + content + "]]")
-    return "#place(top + left, dx: -" + _number(margin_width + 8) + "pt)[#stack(dir: ttb, spacing: 4pt, " + ", ".join(rows) + ")]"
+    return "#place(top + left, dx: -" + _number(margin_width + 8 + rail_shift) + "pt)[#stack(dir: ttb, spacing: 4pt, " + ", ".join(rows) + ")]"
 
 
 def _asset_markup(asset_id, element_id, book, paths, width, issues, inline=True):
@@ -869,7 +875,14 @@ def _figure_labels_markup(element, texts, book, paths, width, profile, issues, l
 
 
 def _element_markup(element, text, book, paths, geometry, width, profile, issues, preview=False, labels=None, columns=1,
-                    texts=None, preview_ids=None, sticky_next=False, markers=(), margin_notes=(), flow_inset=0):
+                    texts=None, preview_ids=None, sticky_next=False, markers=(), margin_notes=(), flow_inset=0,
+                    panel_skip=False, rail_shift=0):
+    if not panel_skip and book.profile.get("source_design_panels_v1"):
+        from .design_panels import body_panel, markup as panel_markup
+        panel = body_panel(book, element.id)
+        if panel:
+            return panel_markup(panel, element, text, book, paths, geometry, width, profile, issues,
+                preview, labels, columns, texts, preview_ids, sticky_next, markers, margin_notes, flow_inset)
     if element.metadata.get("banner_background_asset_ids"):
         return _banner_markup(element, text, book, paths, geometry, profile, issues, preview, labels)
     has_labels = bool(element.metadata.get('figure_label_ids'))
@@ -949,7 +962,7 @@ def _element_markup(element, text, book, paths, geometry, width, profile, issues
 
         options.append("exercise: true")
     if margin_notes:
-        body = _margin_markup(margin_notes, element, texts or {}, book, paths, geometry, width, profile, issues, labels, preview_ids or set(), flow_inset) + body
+        body = _margin_markup(margin_notes, element, texts or {}, book, paths, geometry, width, profile, issues, labels, preview_ids or set(), flow_inset, rail_shift) + body
     return "#tracked(" + ", ".join(args + options) + ")[" + body + "]\n"
 
 
@@ -1059,6 +1072,9 @@ def _rail_markup(rail, book, texts, paths, geometry, profile, issues, labels, pr
 
 def _build_source(book, translations, outdir, geometry, paths, allow_incomplete,
                   settings_name="composition-settings.json", document_preview=None):
+    if book.profile.get("source_design_panels_v1"):
+        from .design_panels import checked_panels
+        checked_panels(book, scoped=True)
     profile = dict(book.profile)
     profile.update({key: _positive(profile.get(key), value) for key, value in _FONT_SIZES.items()})
     texts, preview_ids, issues = {}, set(), []
@@ -1130,6 +1146,10 @@ def _build_source(book, translations, outdir, geometry, paths, allow_incomplete,
     visible = annotate(visible, book.profile.get(PLAN_KEY), page_info)
     visible = _exercise_flow_annotations(visible, page_info)
     groups = _associated_groups(visible, texts, book, geometry, profile)
+    argument_anchors={}
+    if book.profile.get("argument_units_v1"):
+        from .argument_layout import projected_groups
+        groups,argument_anchors=projected_groups(book,groups,geometry)
     page_labels = _book_page_labels(book)
     current_columns, current_chapter, in_columns = 1, "", False
     previous_source_column = None
@@ -1199,7 +1219,10 @@ def _build_source(book, translations, outdir, geometry, paths, allow_incomplete,
             lines.append(f"#block(inset: (left: {_number(inset)}pt), above: {above}pt, below: 5pt, sticky: {sticky})[")
         if keep:
             lines.append("#block(breakable: false, below: 6pt)[")
-        if len(group) > 1 and _inline_key(group[0]):
+        if group[0].id in argument_anchors:
+            from .argument_layout import markup as argument_markup
+            lines.append(argument_markup(argument_anchors[group[0].id],texts,book,paths,geometry,width,profile,issues,page_labels,preview_ids,columns))
+        elif len(group) > 1 and _inline_key(group[0]):
             lines.append(_inline_group_markup(group, texts, book, paths, geometry, width, profile, issues,
                                                page_labels, preview_ids, columns))
         else:
@@ -1435,6 +1458,9 @@ def _partition_book(book):
                 continue
             positions = [page_index[e.page] for e in members]
             flow_spans[("verified-exercise-flow", unit["anchor_id"])] = (min(positions), max(positions))
+    if book.profile.get("argument_units_v1"):
+        from .argument_layout import page_spans
+        flow_spans.update(page_spans(book,page_index))
     if len(pages) <= limit:
         return [book]
     graphic_groups = {e.group_id for e in book.elements
@@ -1648,8 +1674,15 @@ def compose(book: Book, translations: dict, outdir, output_path=None, allow_inco
                     merged.insert_pdf(part_pdf)
             merged.set_metadata({"title": book.title, "producer": f"Textbook PDF / Typst {TYPST_VERSION}"})
             merged.save(temporary, garbage=4, deflate=True)
+    panel_paint_check = None
+    if book.profile.get("source_design_panels_v1"):
+        from .design_panels import restore_exact_paint
+        panel_paint_check = restore_exact_paint(book, temporary, traces)
     diagnostics = "\n".join(diagnostic_messages)
     mapping = _layout_map(book, traces, geometry, output, issues)
+    if panel_paint_check:
+        mapping["source_design_panel_paint_restoration"] = panel_paint_check
+        mapping["source_design_panel_traces"] = [t for t in traces if t.get("type") == "source-panel"]
     mapping["parts"] = part_manifest
     # A second PDF reader verifies that metadata coverage describes the actual
     # compiled document and supplies the physical count even for blank pages.
@@ -1682,6 +1715,13 @@ def compose(book: Book, translations: dict, outdir, output_path=None, allow_inco
         measured_flow_issues = check_reading_order(book.profile[PLAN_KEY], traces, geometry, visible_ids={e.id for e in book.elements})
         issues.extend(measured_flow_issues)
         mapping["exercise_flow_check"] = {"opt_in": True, "issues": measured_flow_issues, "passed": not measured_flow_issues}
+    if book.profile.get("argument_units_v1"):
+        from .argument_qa import check_argument_layout
+        argument_check=check_argument_layout(book,traces,geometry,temporary)
+        issues.extend(argument_check["issues"])
+        mapping["argument_check"]=argument_check
+        argument_ids={eid for u in book.profile["argument_units_v1"].values()for eid in[u['parent_id']]+u['member_ids']}
+        mapping["argument_traces"]=[t for t in traces if str(t.get("type", "")).startswith("argument-")or(t.get('type')=='element'and t.get('id')in argument_ids)]
     blocking = [issue for issue in issues if issue.get("severity") == "error"]
     if blocking and not allow_incomplete:
         # Keep an earlier valid output/map together. Failed measured geometry

@@ -49,3 +49,6 @@ examples/original-demo/generated/**
 !examples/original-demo/generated/native/preview-001.png
 !examples/original-demo/generated/raster/counting-raster-zh.pdf
 !examples/original-demo/generated/raster/preview-001.png
+
+# Self-authored test renderings are regenerated locally.
+evidence/test-artifacts/

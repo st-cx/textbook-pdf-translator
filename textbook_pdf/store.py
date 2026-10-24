@@ -13,9 +13,10 @@ from pathlib import Path
 
 from .models import Book, Element, RULES_VERSION, SCHEMA_VERSION, digest, validate_translation, TOKEN_RE, protected_asset_descriptor
 
-from .numeric_policy import numeric_policy_fields, frozen_policy_matches
+from .numeric_policy_dispatch import numeric_policy_fields, frozen_policy_matches
 from .percentage_policy import percentage_policy_fields, frozen_percentage_policy_matches
 from .century_policy import century_policy_fields, frozen_century_policy_matches
+from .argument_units import argument_member_fields
 
 RULE_HASH_SCHEMA='protected-assets-v2'
 
@@ -31,6 +32,7 @@ def translation_rule_hash(book,element,glossary,legacy=False,schema=None):
     value.update(numeric_policy_fields(element))
     value.update(percentage_policy_fields(element))
     value.update(century_policy_fields(element))
+    value.update(argument_member_fields(element,book))
     return digest(value)
 
 
@@ -352,6 +354,7 @@ class Store:
         if revision is None or getattr(self,'_review_cache_revision',None)!=revision:
             self._review_asset_cache=OrderedDict()
             self._review_cached_source=None
+            self._review_cached_arguments=None
             self._review_cache_revision=revision
         ids=sorted(set(element.asset_ids)|set(TOKEN_RE.findall(element.text)))
         cached=self._review_asset_cache
@@ -377,7 +380,14 @@ class Store:
                 while len(cached)>64:cached.popitem(last=False)
         source,version=self._review_cached_source
         if version!=SCHEMA_VERSION:raise ValueError('Current source schema is unsupported')
-        return Book('',source,'',0,[],elements=[element],assets=assets,schema_version=version)
+        current=Book('',source,'',0,[],elements=[element],assets=assets,schema_version=version)
+        # Source profile relationships are current DB facts, never a stale session copy.
+        if self._review_cached_arguments is None:
+            row=self.db.execute("SELECT json_extract(value,'$.profile.argument_units_v1') FROM metadata WHERE key='book'").fetchone()
+            self._review_cached_arguments=json.loads(row[0]) if row and row[0] is not None else {}
+        units=self._review_cached_arguments
+        if units:current.profile['argument_units_v1']=units
+        return current
 
     def apply_semantic_review(self,element_id,translated,*,source_hash,rule_hash,
                               source_sha256,review_hash,passed,problems,provider,

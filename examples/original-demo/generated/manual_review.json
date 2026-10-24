@@ -1,7 +1,7 @@
 {
   "scope": "原创合成Book/Store重排演示；非端到端OCR、解析或机器翻译评测",
   "content_authorship": "新编英文、对应人工中文和简单公式/代码；无教材来源",
-  "updated_utc": "2026-10-23T12:26:02.247333+00:00",
+  "updated_utc": "2026-10-24T04:40:51.752744+00:00",
   "source_preview": {
     "path": "generated/source-preview.png",
     "sha256": "d1642f38d0b021f76e8a76c27f37ad8fe498c580ce227c1b0a909dfa13dc88ff"
@@ -11,11 +11,11 @@
   "input_pdfs": [
     {
       "path": "generated/original-counting-en.pdf",
-      "sha256": "5706c341d20a6aedbb981b27aa6e82922f850d6a8ee98f0865837485cf65d823"
+      "sha256": "08ff0ffd3c4b3f714e452ecdfb454a261b0546f60fcb2432877aed06f5b56424"
     },
     {
       "path": "generated/original-counting-image-only.pdf",
-      "sha256": "d9ea7a6055da1552f91ad90ce088f5aa3e251cce0af97681dafde3765dbe2ce2"
+      "sha256": "b101efc4243afecf9026f92004002781c96c8558960fd8c8c7b05e2840aec42b"
     }
   ],
   "native_source_text_characters": 1122,
@@ -27,7 +27,7 @@
       "variant": "native",
       "pdf": {
         "path": "generated/native/counting-native-zh.pdf",
-        "sha256": "8ca37c878774eadffd5ccbad6f28bdc02dad03f3da950ce5f3a22497e7d13ae3"
+        "sha256": "a4e80d4abb8f0181cc06d101b60ff7d18275e77d775bf275ec5c659d64ac709a"
       },
       "preview": {
         "path": "generated/native/preview-001.png",
@@ -61,7 +61,7 @@
       "variant": "raster",
       "pdf": {
         "path": "generated/raster/counting-raster-zh.pdf",
-        "sha256": "9fa5085a2b8ba1ffbcab35b3ac3f1536c3cd6d8a37c882576cdbae9bc9b2fa6c"
+        "sha256": "3cc8bf08186b9d01eb718f825502f5ae8cbb583e4cdaa492a0d3e98805a5c4f4"
       },
       "preview": {
         "path": "generated/raster/preview-001.png",
@@ -106,5 +106,5 @@
   },
   "version": "2.0.0rc4",
   "page_label_evidence": "No machine-verifiable printed label: use explicit physical-page fallback in both variants.",
-  "renderer_sha256": "a4417da1d752b8217e9e88f1f19c8143a19fa2ef7f32ff3b9fdd0969447668df"
+  "renderer_sha256": "35a82c8929eabb15ba87ecc6617e19f9768f720c643041e9ae9588fd8bf5a36d"
 }

@@ -136,7 +136,7 @@
   block(width: width, breakable: not keep, sticky: heading or kind == "caption" or sticky-next, above: if heading and not banner { 10pt } else { 0pt }, below: gap)[
     #trace("element", id, "start", width, source-page: source-page, source-label: source-label, column-count: column-count)
     #set text(size: size)
-    #set par(first-line-indent: 0pt, hanging-indent: if exercise { 1.6em } else { 0pt })
+    #set par(justify: not exercise, first-line-indent: 0pt, hanging-indent: if exercise { 1.6em } else { 0pt })
     #if preview { text(size: 8pt, fill: rgb("b83a24"), weight: "bold", "【未翻译原文】 ") }
     #if heading {
       text(font: (heading-font, "Microsoft YaHei"), weight: "bold", fill: rgb(heading-color), body)
@@ -144,4 +144,68 @@
     #if rule-below { line(length: 100%, stroke: .5pt + rgb(heading-color)) }
     #trace("element", id, "end", width, source-page: source-page, source-label: source-label, column-count: column-count)
   ]
+}
+
+// A reviewed flat source background follows the measured translated body.
+// An oversized unit needs explicit continuation boundaries, never compression.
+#let source-design-panel(id, width, whole-height, paint, left, right, top, bottom, body) = context {
+  let panel = block(width: width, breakable: false, fill: paint,
+      inset: (left: left, right: right, top: top, bottom: bottom), above: 0pt, below: 0pt)[
+    #body
+  ]
+  let height = measure(panel, width: width).height
+  if height > whole-height {
+    panic("Source design panel exceeds page: review continuation boundaries; no shrink or clipping")
+  }
+  block(width: width, breakable: false, above: 0pt, below: 5pt)[
+    #trace("source-panel", id, "object", width, height: height)
+    #panel
+  ]
+}
+
+// Explicit source-anchored arguments; no effect unless the source registry opts in.
+#let argument-trace(kind, id, phase, width, role: "", size: 0pt, mode: "") = context {
+  let p = here().position()
+  [#metadata((type: kind, id: id, phase: phase, page: p.page,
+    x: p.x / 1pt, y: p.y / 1pt, width: width / 1pt,
+    role: role, text_size_pt: size / 1pt, mode: mode)) <tb-trace>]
+}
+#let argument-line(unit, id, role, source-page, source-label, width, size, body) = block(width: width, breakable: false, above: 0pt, below: 3pt)[
+  #trace("element", id, "start", width, source-page: source-page, source-label: source-label)
+  #argument-trace("argument-member", id, "start", width, role: role, size: size)
+  #set text(size: size)
+  #set par(justify: false, first-line-indent: 0pt, hanging-indent: 0pt)
+  #body
+  #argument-trace("argument-member", id, "end", width, role: role, size: size)
+  #trace("element", id, "end", width, source-page: source-page, source-label: source-label)
+]
+#let argument-divider(unit, length, thickness) = block(width: length, breakable: false, above: 2pt, below: 3pt)[
+  #argument-trace("argument-divider", unit, "object", length)
+  #line(length: length, stroke: thickness + cmyk(100%, 0%, 0%, 0%))
+]
+#let argument-unit(unit, width, whole-height, parent: [], premises: (), divider: [], conclusion: []) = context {
+  let whole = block(width: width, breakable: false, above: 0pt, below: 5pt)[
+    #parent
+    #for p in premises { p }
+    #divider
+    #conclusion
+  ]
+  let full = measure(whole, width: width).height
+  if full <= whole-height {
+    argument-trace("argument-unit", unit, "mode", width, mode: "short")
+    whole
+  } else {
+    let head = block(width: width, breakable: false)[#parent #premises.first()]
+    let tail = block(width: width, breakable: false)[#premises.last() #divider #conclusion]
+    if measure(head, width: width).height > whole-height or measure(tail, width: width).height > whole-height {
+      panic("Argument parent/premise or atomic tail exceeds whole page; no compression allowed")
+    }
+    for p in premises {
+      if measure(p, width: width).height > whole-height { panic("Argument complete premise exceeds whole page; no compression allowed") }
+    }
+    argument-trace("argument-unit", unit, "mode", width, mode: "long")
+    head
+    for p in premises.slice(1, premises.len() - 1) { p }
+    tail
+  }
 }

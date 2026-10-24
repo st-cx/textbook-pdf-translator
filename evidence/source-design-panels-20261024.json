@@ -1,0 +1,54 @@
+{
+  "schema": "finite-source-design-panel-and-resource-validation-v1",
+  "recorded_on": "2026-10-24",
+  "scope": "Explicit one-label one-paragraph opaque native-CMYK panels, not full-book design reconstruction",
+  "public_regression_evidence": "source-regressions-20261024-panel-cardinal-v1.json",
+  "internal_continuous_sample": {
+    "source_generation": "source-v65",
+    "original_physical_pages": [
+      103,
+      104,
+      105,
+      106,
+      107,
+      108,
+      109
+    ],
+    "output_pages": 7,
+    "accepted_translations": 186,
+    "selected_individual_semantic_reviews_passed": 154,
+    "joint_arguments_passed": 4,
+    "output_asset_pixels_checked": 212,
+    "output_asset_pixels_passed": 212,
+    "native_presence_assets": 208,
+    "QA_errors": 0,
+    "QA_warnings": 1,
+    "exact_CMYK_panels": 1,
+    "all7_preview_bytes_equal_previous_directly_reviewed_outputs": true,
+    "current_risk_output_pages_viewed_again": [
+      4,
+      6,
+      7
+    ],
+    "limitation": "Object pixels compare output to immutable crops. Presence counts are not formula semantics. Gray table-rule design difference and preview header remain."
+  },
+  "independent_hardening": {
+    "invalid_trace_cases_rejected": 34,
+    "CFF_FontFile3_without_Length1_program_fault_rejected": true,
+    "good_output_retained_after_rejected_save": true,
+    "bad_actual_QA_cases_rejected": 7,
+    "changed_paint_with_updated_pdf_SHA_still_rejected": true,
+    "actual_self_authored_resource_fixture": {
+      "pages": 21,
+      "used_distinct_font_resources": 21021,
+      "rendered_glyphs_per_page": 1001,
+      "prior_global_limit_rejected": true,
+      "current_per_page_check_passed": true
+    },
+    "per_page_resource_node_limit": 20000,
+    "dependency_depth_limit": 256
+  },
+  "private_materials_included": false,
+  "full_book_accepted": false,
+  "competitor_leadership_established": false
+}
