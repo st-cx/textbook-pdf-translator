@@ -831,7 +831,7 @@ def _banner_markup(element, text, book, paths, geometry, profile, issues, previe
                               "pt)[#align(center)[#text(size: " + _number(font_size) + "pt, fill: rgb(" + _q(fill) + "), " + _q(content) + ")]]]")
     placements.append('#if settings.preview { place(top + right, dy: ' + _number(8 - geometry["top"]) +
                       'pt)[#block(width: 240pt)[#align(right)[#text(size: 8pt, fill: rgb("b83a24"), "未完成翻译或解析预览")' +
-                      '#if settings.source_error_summary != "" { linebreak(); text(size: 7.5pt, fill: rgb("b83a24"), settings.source_error_summary) }]]] }')
+                      '#if settings.source_error_summary != "" { linebreak(); text(size: 8.5pt, fill: rgb("b83a24"), settings.source_error_summary) }]]] }')
     title_height = _estimate_height(element, title, book, rect[2] - rect[0], profile)
     height = max(source_bottom, rect[1] + title_height) - geometry["top"] + 10
     body = "#block(width: " + _number(width) + "pt, height: " + _number(height) + "pt)[" + "".join(placements) + "]"

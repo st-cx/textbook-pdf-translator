@@ -11,6 +11,33 @@ import pymupdf
 class LayoutFlowTests(unittest.TestCase):
     geometry = {"width": 612, "height": 792, "left": 48, "right": 48, "top": 45, "bottom": 45, "gutter": 18}
 
+    def test_actual_preview_source_warning_summary_keeps_readable_font(self):
+        try:
+            layout._Runtime.find()
+        except layout.CompositionError:
+            self.skipTest("Pinned Typst runtime is optional")
+        directory = Path(__file__).resolve().parent / "_tmp_layout_flow" / uuid.uuid4().hex
+        directory.mkdir(parents=True)
+        try:
+            body = Element("body", "paragraph", "A complete paragraph.", 1, [48, 80, 540, 110])
+            book = Book("self-authored.pdf", "self-authored", "Source warning fixture", 1, [1],
+                        pages=[{"number": 1, "width": 612, "height": 792, "printed_page": "1"}],
+                        elements=[body], issues=[{"code": "source_hold_" + str(n), "severity": "error",
+                            "page": 1, "element_id": "body"} for n in range(4)])
+            result = layout.compose(book, {"body": "这是一段完整的正文。"}, directory / "rendered", allow_incomplete=True)
+            with pymupdf.open(result["pdf_path"]) as doc:
+                spans = [span for page in doc for block in page.get_text("dict")["blocks"]
+                         for line in block.get("lines", []) for span in line["spans"]]
+                warning = [span for span in spans if "另有" in span["text"]]
+                self.assertTrue(warning)
+                self.assertTrue(all(abs(span["size"] - 8.5) < .01 for span in warning))
+                body_spans = [span for span in spans if "完整的正文" in span["text"]]
+                self.assertTrue(body_spans)
+                self.assertTrue(all(abs(span["size"] - 10.5) < .01 for span in body_spans))
+        finally:
+            self.assertTrue(directory.resolve().is_relative_to((Path(__file__).resolve().parent / "_tmp_layout_flow").resolve()))
+            shutil.rmtree(directory)
+
     def test_actual_caption_is_centered_over_its_narrow_table_frame(self):
         try:
             layout._Runtime.find()

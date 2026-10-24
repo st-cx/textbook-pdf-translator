@@ -49,7 +49,7 @@
         #text(size: 8pt, fill: rgb("b83a24"), "未完成翻译或解析预览")
         #if settings.source_error_summary != "" {
           linebreak()
-          text(size: 7.5pt, fill: rgb("b83a24"), settings.source_error_summary)
+          text(size: 8.5pt, fill: rgb("b83a24"), settings.source_error_summary)
         }
       ]
     } else { none },

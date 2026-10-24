@@ -21,7 +21,7 @@ import urllib.request
 import uuid
 
 from .models import (RULES_VERSION, TOKEN_RE, TRANSLATABLE, Book, digest,
-                     protected_asset_descriptor, validate_translation)
+                     protected_asset_descriptor, validate_translation, source_error_scope)
 
 from .numeric_policy_dispatch import numeric_policy_fields, frozen_policy_matches
 from .percentage_policy import percentage_policy_fields, frozen_percentage_policy_matches
@@ -70,8 +70,7 @@ def make_tasks(book: Book, glossary: dict, target_chars: int = 2400) -> list[dic
     if not isinstance(target_chars, int) or target_chars < 1:
         raise ValueError("target_chars must be a positive integer")
     frozen_glossary = dict(sorted((str(k), str(v)) for k, v in glossary.items()))
-    blocked_ids={i.get('element_id') for i in book.issues if i.get('severity')=='error' and i.get('element_id')}
-    blocked_pages={i.get('page') for i in book.issues if i.get('severity')=='error' and not i.get('element_id') and i.get('page')}
+    blocked_ids, blocked_pages = source_error_scope(book)
     elements = [e for e in book.elements if _translatable(e) and e.id not in blocked_ids and e.page not in blocked_pages]
     spans, span = {}, 0
     for index, element in enumerate(elements):

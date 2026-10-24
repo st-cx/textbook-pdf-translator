@@ -146,6 +146,39 @@ def plain_text(element: Element, book: Book) -> str:
 def source_label(element: Element) -> str:
     return f"原书 p.{element.printed_page}" if element.printed_page else f"原 PDF 第{element.page}页"
 
+def source_error_scope(book):
+    """Block every declared owner of a source error before forming requests.
+
+    A multi-element issue can describe one question across columns or pages.
+    Its singular element_id is only an anchor; all element_ids remain blocked.
+    An unresolved owner falls back to its page, and a global error blocks all
+    selected pages. Malformed scopes fail closed rather than dropping a hold.
+    """
+    known = set(book.element_map())
+    blocked_ids, blocked_pages = set(), set()
+    for issue in book.issues:
+        if issue.get('severity') != 'error':
+            continue
+        members = issue.get('element_ids', [])
+        if members is None:
+            members = []
+        anchor = issue.get('element_id')
+        if (not isinstance(members, list) or
+                any(not isinstance(eid, str) or not eid.strip() for eid in members) or
+                (anchor is not None and (not isinstance(anchor, str) or not anchor.strip()))):
+            raise ValueError('Malformed source issue element scope')
+        ids = set(members)
+        if anchor is not None:
+            ids.add(anchor)
+        page = issue.get('page')
+        if page is not None and (type(page) is not int or not 1 <= page <= book.page_count):
+            raise ValueError('Malformed source issue page scope')
+        blocked_ids.update(ids)
+        if not ids or ids - known:
+            blocked_pages.update([page] if page is not None else book.selected_pages)
+    return blocked_ids, blocked_pages
+
+
 def source_contract_issues(book):
     """Structural failures must be reportable before a paid task is created."""
     from collections import Counter
