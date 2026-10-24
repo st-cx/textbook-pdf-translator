@@ -1,8 +1,13 @@
 # Textbook PDF Translator
 
+The Chinese desktop launcher `开始翻译.bat` now supports automatic bounded batches,
+resume, safe stop, optional review samples and a reading draft. Failed pages are
+explicitly retained in the original language, with a source-page report. This is
+separate from formal full-book acceptance. [Guide (Chinese)](docs/AUTOMATIC.md)
+
 Keep original mathematical objects and reflow translated Chinese at stable role-based font sizes. Extra pages retain source-page labels.
 
-**2.0.0-rc.4 is a candidate release. No large textbook has completed full-book translation and final visual acceptance.** The 2026-10-24 internal Rosen snapshot (source-v69) covers 1,118 original pages: 28,582 elements require translation and 13,104 have current source/rule-bound accepted translations. Accepted does not mean independently reviewed. See [current progress](docs/ROSEN_PROGRESS.md) and the [aggregate](evidence/rosen-progress-20261022.json).
+**2.0.0-rc.5 is a candidate release. No large textbook has completed full-book translation and final visual acceptance.** The 2026-10-24 internal Rosen snapshot (source-v69) covers 1,118 original pages: 28,582 elements require translation and 13,196 have current source/rule-bound accepted translations. Accepted does not mean independently reviewed. See [current progress](docs/ROSEN_PROGRESS.md) and the [aggregate](evidence/rosen-progress-20261022.json).
 
 This release adds native ink envelopes measured from the original embedded font program, glyph ID and full 2×2 text matrix, followed by actual saved-object identity checks. It preserves italic overhangs and terminal strokes without changing the structural box or shrinking text. Unknown identity, unsupported rotation and missing embedded fonts remain explicit source issues. Source, ink, mathematical relationships, semantics and composed-output checks remain separate.
 
@@ -24,7 +29,7 @@ powershell -ExecutionPolicy Bypass -File .\安装依赖.ps1
 .\.venv\Scripts\python.exe translate_pdf.py "book.pdf" --stage prepare --pages 1-3 --out "sample" --no-legacy-import
 ```
 
-Current local source regressions: **966 tests, 949 passed, 17 optional skips, zero failures/errors**, with matching pre/post source and fixture hashes. This is local validation, not hosted GitHub CI or full-book acceptance. [Bound receipt](evidence/source-regressions-20261024-archived-source-scope-v1.json)
+Current local source regressions: **1,046 tests, 1,029 passed, 17 optional skips, zero failures/errors**, with matching pre/post source and fixture hashes. This is local validation, not hosted GitHub CI or full-book acceptance. [Bound receipt](evidence/source-regressions-20261024-desktop-auto-v2.json)
 
 The earlier 24-page/7-page digital and 3-page unindexed scan samples are historical rc.2 results. Their 796/796 and 421/421 pixel passes compare composed output with the source crops then used, not those crops with the original book. Newly discovered source-crop risks have not been repaired in those historical outputs. The [original authored demo](examples/original-demo) proves known Book/Store structure to composition, not OCR, automatic extraction or translation-model quality.
 

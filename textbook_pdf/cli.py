@@ -144,10 +144,33 @@ def main(argv=None):
     ap.add_argument('--estimate',action='store_true',help='只分析和估算，不调用翻译 API')
     ap.add_argument('--resume',action='store_true',help='继续任务；默认已自动使用有效缓存')
     ap.add_argument('--retry-failed',action='store_true')
+    ap.add_argument('--auto',action='store_true',help='自动分批翻译、可选抽查并生成阅读稿；疑难内容单独列出，常规内容继续')
+    ap.add_argument('--draft-only',action='store_true',help='与 --auto 同用：只用已有译文生成阅读稿，不调用API')
+    ap.add_argument('--batch-size',type=int,default=8,help='自动模式每批任务数，默认8；安全停止在批次边界生效')
+    ap.add_argument('--review-limit',type=int,default=32,help='自动模式本次最多抽查的元素数，默认32，0表示先翻译')
+    ap.add_argument('--max-seconds',type=float,help='自动模式本次时间预算（秒），批次边界检查')
+    ap.add_argument('--stop-file',help='自动模式：出现此文件后在批次边界安全停止')
     args=ap.parse_args(argv)
     if args.workers<1 or args.workers>32:ap.error('--workers 必须在1到32之间')
     if not 150<=args.ocr_dpi<=600:ap.error('--ocr-dpi 必须在150到600之间')
     if args.target_chars is not None and args.target_chars<200:ap.error('--target-chars 不得小于200')
+    if args.draft_only and not args.auto:ap.error('--draft-only 必须与 --auto 同用')
+    if args.auto:
+        if args.estimate or args.dump or args.assemble_only or args.import_legacy or args.stage!='all':
+            ap.error('自动模式使用 --auto 或 --auto --draft-only；估算、旧缓存导入与分阶段命令请单独运行')
+        if args.retry_failed or args.task_id or args.review_unit_id or args.max_review_units is not None:
+            ap.error('自动模式不重置历史失败或改动指定联合任务；局部修复请使用原阶段命令')
+        from .autopilot import AutoOptions,run_job
+        result=run_job(AutoOptions(pdf=args.pdf,out=args.out,config_path=args.config,
+            provider=args.provider,review_provider=args.review_provider,workers=args.workers,
+            batch_size=args.batch_size,max_tasks=0 if args.draft_only else args.max_tasks,
+            max_seconds=args.max_seconds,review=bool(args.review_provider and args.review_limit and not args.draft_only),
+            max_review_elements=args.review_limit,pages=args.pages,backend=args.backend,
+            ocr=args.ocr,ocr_dpi=args.ocr_dpi,glossary_path=args.glossary,stop_file=args.stop_file,
+            target_chars=args.target_chars or 2400),
+            lambda event:print(event.get('message',event.get('stage','')),flush=True))
+        _print(result)
+        return 2 if result.get('state') in {'error','busy','blocked'} else 0
     stage='layout' if args.assemble_only else 'prepare' if args.dump else args.stage
     if args.estimate:stage='prepare'
     if args.max_review_units is not None and args.max_review_units<0:ap.error('--max-review-units 必须非负')

@@ -1,5 +1,9 @@
 # Shared contract
 
+Desktop/automatic entry: `autopilot.AutoOptions` and synchronous `run_job(options, event_callback)` reuse the same `Store`. A job has one OS lock; leases and source revisions still govern all writes. Cancellation is cooperative at bounded batch/part boundaries. The status JSON is derived, not another authority. New jobs use the existing analyzer/preflight; existing jobs never silently re-register, import legacy data or reset failed work. Ordinary review uses a source-safe temporary view and leaves registered joint protocols separate.
+
+`reading_draft.compose_reading_draft` is separate from formal `layout.compose`. Failed parts are bisected and a still-failing source page is retained unscaled with an untranslated warning. Actual source/output page coverage is verified, immutable inputs bind reusable parts, and the merged draft/report remain explicitly unaccepted. Formal maps and PDFs are not overwritten. Detailed final QA remains available after the user's automated run.
+
 `textbook_pdf.models` owns the neutral JSON schema. A `Book` holds `Element` records and immutable `Asset` records. Physical source pages are one based. Coordinates are PDF points with top-left origin. Asset paths are relative to the book job directory. Math tokens are exactly `⟦F:asset_id⟧`. No renderer or translator may change asset contents. Translation dictionaries map stable element IDs to strings. Shared SQLite state is owned by `store.py`; agents must not create another authoritative translation store.
 
 Parser: `extraction.analyze(pdf_path, outdir, pages=None, backend="auto") -> Book`; stores assets under outdir/assets, returns Book and records issues. BabelDOC bridge is optional but must genuinely export formulas/styles when available; no pretending that fallback used BabelDOC.

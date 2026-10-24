@@ -1,0 +1,73 @@
+{
+  "recorded_at_utc": "2026-10-24T12:37:57.416184+00:00",
+  "scope": "Two newly authored English pages through native analysis, real gateway translation, bounded resume and reading draft; not a textbook benchmark.",
+  "source_pages": 2,
+  "output_pages": 1,
+  "required_translations": 8,
+  "accepted_translations": 8,
+  "explicitly_requested_current_bound_independent_prose_passes": 6,
+  "risk_based_review_status_is_distinct_from_explicit_pass_records": true,
+  "actual_model_requests_including_explicit_review": 6,
+  "translation_models": [
+    "zcode/GLM-5.3-Flash"
+  ],
+  "review_models": [
+    "zcode/GLM-5.3"
+  ],
+  "resume_existing_translations_not_retranslated": true,
+  "draft_only_actual_requests": 0,
+  "draft_only_database_usage_unchanged": true,
+  "draft_parts_reused": 1,
+  "fallback_source_pages": [],
+  "output_pdf_sha256": "edc4dead096992467e3914fab164cb1aae0029c21c6e3eaf41bca9863a0e0b69",
+  "source_and_output_visually_checked": true,
+  "whole_book_accepted": false,
+  "private_materials_published": false,
+  "visual_scope": "Two source pages and the one-page final Chinese draft, directly inspected; not a whole-book visual review.",
+  "protected_output_pixels": {
+    "checked": 2,
+    "passed": 2,
+    "not_passed": 0,
+    "all_eligible_occurrences_checked": true
+  },
+  "rosen_current_read_only_snapshot": {
+    "recorded_at_utc": "2026-10-24T12:27:10.044899+00:00",
+    "source_snapshot": "source-v69",
+    "required": 28582,
+    "accepted_translatable": 13196,
+    "task_states": {
+      "done": 702,
+      "failed": 6,
+      "partial": 1,
+      "pending": 1306
+    },
+    "usage_rows": 4072,
+    "live_leases": 0,
+    "source_sqlite_total_changes": 0
+  },
+  "local_regressions": {
+    "counted": 1046,
+    "passed": 1029,
+    "skipped": 17,
+    "failures": 0,
+    "errors": 0,
+    "seconds": 57.572,
+    "successful": true,
+    "hosted_ci": false
+  },
+  "regression_evidence": "source-regressions-20261024-desktop-auto-v2.json",
+  "full_book_translation_finished": false,
+  "competitor_superiority_proven": false,
+  "installed_full_rosen_resume_check": {
+    "passed": true,
+    "required": 28582,
+    "accepted": 13196,
+    "api_calls": 0,
+    "sqlite_total_changes": [
+      0
+    ],
+    "book_and_database_bytes_unchanged_during_check": true,
+    "startup_seconds": 135.134,
+    "long_run_started": false
+  }
+}
