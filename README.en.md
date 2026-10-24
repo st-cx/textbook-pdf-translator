@@ -2,7 +2,7 @@
 
 Keep original mathematical objects and reflow translated Chinese at stable role-based font sizes. Extra pages retain source-page labels.
 
-**2.0.0-rc.4 is a candidate release. No large textbook has completed full-book translation and final visual acceptance.** The 2026-10-24 internal Rosen snapshot (source-v65) covers1,118 original pages:28,624 elements require translation and12,469 have current source/rule-bound accepted translations. Accepted does not mean independently reviewed. See [current progress](docs/ROSEN_PROGRESS.md) and the [aggregate](evidence/rosen-progress-20261022.json).
+**2.0.0-rc.4 is a candidate release. No large textbook has completed full-book translation and final visual acceptance.** The 2026-10-24 internal Rosen snapshot (source-v66) covers 1,118 original pages: 28,623 elements require translation and 12,550 have current source/rule-bound accepted translations. Accepted does not mean independently reviewed. See [current progress](docs/ROSEN_PROGRESS.md) and the [aggregate](evidence/rosen-progress-20261022.json).
 
 This release adds native ink envelopes measured from the original embedded font program, glyph ID and full 2×2 text matrix, followed by actual saved-object identity checks. It preserves italic overhangs and terminal strokes without changing the structural box or shrinking text. Unknown identity, unsupported rotation and missing embedded fonts remain explicit source issues. Source, ink, mathematical relationships, semantics and composed-output checks remain separate.
 

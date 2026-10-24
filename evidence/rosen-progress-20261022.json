@@ -1,27 +1,27 @@
 {
   "schema_version": 4,
   "recorded_on": "2026-10-24",
-  "recorded_at_utc": "2026-10-24T04:34:35.187505+00:00",
-  "source_snapshot": "source-v65",
-  "registered_source_snapshot": "source-v65",
-  "source_book_sha256": "a726c46f5ffd1d3f56a7bcfe3276b7a509ee2ba0b46135347368cd110d8a0406",
+  "recorded_at_utc": "2026-10-24T05:55:26.616786+00:00",
+  "source_snapshot": "source-v66",
+  "registered_source_snapshot": "source-v66",
+  "source_book_sha256": "dbef85c68824926644668f8a1e19f27193b80d3fa678188e9d7f6bfaad80f1dc",
   "source_pdf_sha256": "cdf36691e43fef9c7f7140daea5e99c0f65d3af772136c64e9bd31a8a5b1d65c",
-  "source_contract_sha256": "57f69a993cfcfe19cde8ceeaeb1371fac8474f453c50e0dee9d1d8633c53cad8",
+  "source_contract_sha256": "369387157a5586f62fc8f17d37e97249637a843db049bc7bfeabbd0e23eee933",
   "scope": "One current read transaction; private textbook processing aggregates, not a public benchmark.",
   "source_physical_pages": 1118,
   "source_elements": 42938,
-  "source_assets_including_archived": 71305,
-  "required_translations": 28624,
-  "current_contract_accepted_translations": 12469,
-  "current_accepted_rows_including_preserved_elements": 13316,
+  "source_assets_including_archived": 71306,
+  "required_translations": 28623,
+  "current_contract_accepted_translations": 12550,
+  "current_accepted_rows_including_preserved_elements": 13397,
   "semantic_review_current_contract": {
-    "required": 28624,
-    "accepted": 12469,
-    "selected": 21304,
-    "passed": 3254,
-    "pending": 4873,
-    "failed": 13,
-    "awaiting_translation": 13164,
+    "required": 28623,
+    "accepted": 12550,
+    "selected": 21303,
+    "passed": 3382,
+    "pending": 4811,
+    "failed": 14,
+    "awaiting_translation": 13096,
     "coverage_complete": false,
     "counts_are_current_hash_bound": true
   },
@@ -40,10 +40,10 @@
     "unverifiable": 0
   },
   "current_task_states": {
-    "done": 723,
-    "pending": 1372,
+    "done": 735,
+    "pending": 1359,
     "failed": 7,
-    "partial": 1
+    "partial": 2
   },
   "source_blocking_issues": 2248,
   "source_blocking_pages": 567,
@@ -76,10 +76,10 @@
     "passed_assets": 52538,
     "missing_glyph_assets": 0,
     "unverifiable_assets": 0,
-    "selected_source_glyphs": 278662,
+    "selected_source_glyphs": 278657,
     "extra_extracted_glyphs_not_certified": 652
   },
-  "native_audit_sha256": "9bb56e4549fc337df115d8cf670d6e5f505089b8060074b7cac0a517757cf1b4",
+  "native_audit_sha256": "c93163ae56210934dc5817c3757e586cd111168edce649adf4b6d00e83c73866",
   "source_page_labels": {
     "checked_pages": 1118,
     "printed_labels_supported": 1100,
@@ -102,6 +102,15 @@
     "source65_owner_only_changes": 162,
     "source65_exact_order_permutations": 1,
     "source65_closed_exact_column_hold": 1,
+    "source66_changed_source_elements": 19,
+    "source66_new_native_assets": 1,
+    "source66_archived_assets": 1,
+    "source66_exact_glyph_row_changes": 646,
+    "source66_owner_only_changes": 638,
+    "source66_closed_exact_diagnostics": 0,
+    "source66_original_question_glyph_partition": 2220,
+    "source66_layout_only_panel_registry_added": true,
+    "source66_explicit_bit_string_role_policy_added": true,
     "old_semantic_passes_copied": 0,
     "limitation": "Source integration facts, not counts of complete formulas or translated pages."
   },
@@ -116,25 +125,36 @@
   },
   "regression_evidence": "source-regressions-20261024-panel-cardinal-v1.json",
   "last_finished_batch": {
-    "source_generation": "source-v64",
-    "selected_tasks": 32,
-    "initial_missing_translations": 220,
+    "source_generation": "source-v65",
+    "selected_tasks": 2,
+    "initial_missing_translations": 14,
     "current_initial_missing_outcomes": {
-      "accepted": 208,
-      "missing_or_stale": 12
+      "accepted": 14
     },
     "current_selected_task_states": {
-      "pending": 6,
-      "done": 26
+      "done": 2
     },
-    "actual_completion_requests": 142,
-    "actual_requests_by_provider": {
-      "magpie": 70,
-      "magpie-review": 72
-    },
-    "requests_with_unknown_usage": 12,
-    "lock_to_final_result_seconds": 1046.67,
-    "later_source_registration_can_invalidate_accepted_rows": true
+    "actual_completion_requests": 7,
+    "requests_with_unknown_usage": 0,
+    "later_source_registration_can_invalidate_accepted_rows": true,
+    "actual_requests_by_role": {
+      "translation": 3,
+      "independent_review": 4
+    }
+  },
+  "source66_single_question_independent_review": {
+    "manual_source_verified_translation": 1,
+    "strong_independent_review_passed": 1,
+    "actual_review_completion_requests": 1,
+    "source_page_or_book_accepted": false
+  },
+  "catalogue_alias_check": {
+    "actual_spellings_checked": 2,
+    "self_authored_semantic_controls_per_spelling": 4,
+    "all_controls_passed": true,
+    "book_content_sent_in_controls": false,
+    "configured_request_model_unchanged": true,
+    "not_a_model_benchmark": true
   },
   "pricing_status": "Gateway prices unknown; zero estimates do not establish free billing."
 }
