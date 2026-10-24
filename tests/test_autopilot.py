@@ -533,6 +533,112 @@ class AutopilotTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             oversized.value()
 
+    def test_default_and_manual_workers_really_fill_batches_and_continue(self):
+        self.book.page_count = 64
+        self.book.selected_pages = list(range(1, 65))
+        self.book.elements = [Element("parallel-" + str(n), "paragraph", "There is one case.", n,
+            chapter="chapter-" + str(n)) for n in range(1, 65)]
+        defaults = autopilot.AutoOptions()
+        self.assertEqual(defaults.workers, 32)
+        self.assertIsNone(defaults.batch_size)
+        for workers in (32, 4, 16):
+            with self.subTest(workers=workers):
+                self.calls.clear()
+                barrier = threading.Barrier(workers)
+                guard = threading.Lock()
+                activity = {"current": 0, "peak": 0}
+                sessions, events = [], []
+                def parallel_api(provider, messages):
+                    with guard:
+                        activity["current"] += 1
+                        activity["peak"] = max(activity["peak"], activity["current"])
+                    try:
+                        barrier.wait(timeout=10)
+                        return self.chat(provider, messages)
+                    finally:
+                        with guard:
+                            activity["current"] -= 1
+                original = translation.run_translation
+                def observed(*args, **kwargs):
+                    sessions.append(kwargs["routing_session"])
+                    return original(*args, **kwargs)
+                option = self.options(out=self.root / ("workers-" + str(workers)), workers=workers, batch_size=None, draft=False)
+                with patch.object(autopilot, "run_translation", side_effect=observed):
+                    result, _ = self.run_job(option, events.append, api=parallel_api)
+                self.assertEqual(result["state"], "finished", result)
+                self.assertEqual(activity["peak"], workers)
+                self.assertEqual(len(self.calls), 64)
+                self.assertEqual(result["summary"]["accepted"], 64)
+                self.assertEqual(result["metrics"]["batches"], 64 // workers)
+                self.assertEqual(result["metrics"]["configured_workers"], workers)
+                self.assertEqual(result["metrics"]["effective_batch_size"], workers)
+                self.assertGreaterEqual(len(sessions), 2)
+                self.assertTrue(all(session is sessions[0] for session in sessions))
+                self.assertTrue(all(e["configured_workers"] == workers and e["effective_batch_size"] == workers for e in events))
+                self.assertTrue(any(str(workers) + " 个任务" in e["message"] for e in events))
+
+    def test_explicit_smaller_batch_limits_actual_concurrency(self):
+        self.book.page_count = 8
+        self.book.selected_pages = list(range(1, 9))
+        self.book.elements = [Element("limited-" + str(n), "paragraph", "There is one case.", n,
+            chapter="chapter-" + str(n)) for n in range(1, 9)]
+        barrier, guard = threading.Barrier(4), threading.Lock()
+        activity = {"current": 0, "peak": 0}
+        def parallel_api(provider, messages):
+            with guard:
+                activity["current"] += 1
+                activity["peak"] = max(activity["peak"], activity["current"])
+            try:
+                barrier.wait(timeout=10)
+                return self.chat(provider, messages)
+            finally:
+                with guard:
+                    activity["current"] -= 1
+        result, _ = self.run_job(self.options(workers=32, batch_size=4, draft=False), api=parallel_api)
+        self.assertEqual(result["summary"]["accepted"], 8, result)
+        self.assertEqual(activity["peak"], 4)
+        self.assertEqual(result["metrics"]["batches"], 2)
+        self.assertEqual(result["metrics"]["effective_batch_size"], 4)
+        for invalid in (0, 129, True, "32"):
+            self.assertEqual(autopilot.check_readiness(self.options(batch_size=invalid))["reason"], "invalid_options")
+
+    def test_translation_pool_readiness_keeps_review_on_explicit_provider(self):
+        config = json.loads(self.config.read_text(encoding="utf-8"))
+        config["providers"]["second"] = {**config["providers"]["fake"], "model": "other-model"}
+        config["provider_pools"] = {"pool": {"providers": ["fake", "second"]}}
+        self.config.write_text(json.dumps(config), encoding="utf-8")
+        with patch.object(translation, "_chat", side_effect=AssertionError("readiness must not send requests")):
+            self.assertTrue(autopilot.check_readiness(self.options(provider="pool"))["ready"])
+            self.assertFalse(autopilot.check_readiness(self.options(provider="pool", review=True))["ready"])
+            self.assertFalse(autopilot.check_readiness(self.options(provider="pool", review=True, review_provider="pool"))["ready"])
+            self.assertTrue(autopilot.check_readiness(self.options(provider="pool", review=True, review_provider="fake"))["ready"])
+            self.assertTrue(autopilot.check_readiness(self.options(provider="pool", batch_size=128))["ready"])
+
+    def test_pool_blocked_route_health_is_reused_across_batches(self):
+        config = json.loads(self.config.read_text(encoding="utf-8"))
+        config["providers"]["second"] = {**config["providers"]["fake"], "model": "other-model"}
+        config["provider_pools"] = {"pool": {"providers": ["fake", "second"]}}
+        self.config.write_text(json.dumps(config), encoding="utf-8")
+        routes, sessions = [], []
+        def route_api(provider, messages):
+            routes.append(provider.name)
+            if provider.name == "fake":
+                raise translation._HTTPFailure(402)
+            return self.chat(provider, messages)
+        original = translation.run_translation
+        def observed(*args, **kwargs):
+            sessions.append(kwargs["routing_session"])
+            return original(*args, **kwargs)
+        with patch.object(autopilot, "run_translation", side_effect=observed):
+            result, _ = self.run_job(self.options(provider="pool", batch_size=1), api=route_api)
+        self.assertEqual(result["state"], "finished", result)
+        self.assertEqual(result["summary"]["accepted"], 3)
+        self.assertEqual(routes.count("fake"), 1)
+        self.assertEqual(routes.count("second"), 3)
+        self.assertEqual(len(sessions), 3)
+        self.assertTrue(all(session is sessions[0] for session in sessions))
+        self.assertIn("fake", sessions[0].snapshot()["blocked"])
+
 
 if __name__ == "__main__":
     unittest.main()

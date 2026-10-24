@@ -28,8 +28,8 @@ class AutoOptions:
     config_path: str | Path | None = None
     provider: str | None = None
     review_provider: str | None = None
-    workers: int = 8
-    batch_size: int = 8
+    workers: int = 32
+    batch_size: int | None = None
     target_chars: int = 2400
     pages: str | list[int] | None = None
     backend: str = "auto"
@@ -80,11 +80,13 @@ def _pages(value):
 def _validate(options):
     if options.glossary is not None and options.glossary_path is not None and Path(options.glossary).resolve() != Path(options.glossary_path).resolve():
         raise _Refusal("invalid_options", "术语表的两个参数指向不同文件。")
-    for name, low, high in (("workers", 1, 32), ("batch_size", 1, 128),
+    for name, low, high in (("workers", 1, 32),
                             ("target_chars", 1, 100000), ("ocr_dpi", 72, 1200)):
         value = getattr(options, name)
         if type(value) is not int or not low <= value <= high:
             raise _Refusal("invalid_options", "运行参数超出允许范围。")
+    if options.batch_size is not None and (type(options.batch_size) is not int or not 1 <= options.batch_size <= 128):
+        raise _Refusal("invalid_options", "每批任务数必须在 1 到 128 之间；留空则跟随并发数。")
     for name in ("max_tasks", "max_review_elements"):
         value = getattr(options, name)
         if value is not None and (type(value) is not int or value < 0):
@@ -102,10 +104,14 @@ def _validate(options):
 def _providers(config, options):
     try:
         data = json.loads(config.read_text(encoding="utf-8-sig"))
-        selected = _load_provider(data, options.provider)
+        from .translation import _load_translation_providers
+        chosen, _ = _load_translation_providers(data, options.provider)
         if options.review:
-            _load_provider(data, options.review_provider or selected.name)
-        return selected.name
+            # A translation pool cannot silently become a review model.
+            if options.review_provider is None and chosen not in data.get("providers", {}):
+                raise ValueError("Explicit independent review provider is required for a pool")
+            _load_provider(data, options.review_provider or chosen)
+        return chosen, data
     except Exception:
         raise _Refusal("provider_unavailable", "供应商配置缺失或无效，请先检查设置。") from None
 
@@ -420,7 +426,8 @@ def run_job(options: AutoOptions, event_callback=None) -> dict:
     out = None
     stop_requested = False
     metrics = {"attempted_tasks": 0, "batches": 0, "new_accepted": 0, "requests": 0,
-               "failed_requests": 0, "input_tokens": 0, "output_tokens": 0}
+               "failed_requests": 0, "input_tokens": 0, "output_tokens": 0,
+               "configured_workers": options.workers, "effective_batch_size": None}
     summary = {"accepted": 0, "total": 0, "remaining": 0, "source_errors": 0, "output_pdf": None}
 
     def emit(stage, state, message, progress=None):
@@ -431,7 +438,9 @@ def run_job(options: AutoOptions, event_callback=None) -> dict:
                  "progress": progress if progress is not None else summary["accepted"] / summary["total"] if summary["total"] else 0.0,
                  "current": summary["accepted"], "total": summary["total"], "summary": dict(summary),
                  "elapsed_seconds": round(elapsed, 3),
-                 "elements_per_minute": speed, "speed_elements_per_minute": speed}
+                 "elements_per_minute": speed, "speed_elements_per_minute": speed,
+                 "configured_workers": metrics["configured_workers"],
+                 "effective_batch_size": metrics["effective_batch_size"]}
         if out is not None:
             with (out / "autopilot_events.jsonl").open("a", encoding="utf-8") as stream:
                 stream.write(json.dumps(event, ensure_ascii=False) + "\n")
@@ -461,6 +470,8 @@ def run_job(options: AutoOptions, event_callback=None) -> dict:
 
     try:
         pages = _validate(options)
+        batch_size = options.workers if options.batch_size is None else options.batch_size
+        metrics["effective_batch_size"] = batch_size
         glossary_path = options.glossary_path or options.glossary
         pdf, chosen_out, config = _paths(options)
         with _job_lock(chosen_out):
@@ -522,6 +533,7 @@ def run_job(options: AutoOptions, event_callback=None) -> dict:
                 attempted = set()
                 state, reason = "incomplete", "pending_work"
                 configured = False
+                routing_session = None
                 emit("prepare", "running", "任务已就绪；问题范围将保留原文，其余内容继续处理。")
                 while True:
                     current()
@@ -532,15 +544,20 @@ def run_job(options: AutoOptions, event_callback=None) -> dict:
                     if options.max_tasks is not None and len(attempted) >= options.max_tasks:
                         state, reason = "budget_reached", "task_budget"
                         break
-                    remaining_budget = options.batch_size if options.max_tasks is None else min(options.batch_size, options.max_tasks-len(attempted))
+                    remaining_budget = batch_size if options.max_tasks is None else min(batch_size, options.max_tasks-len(attempted))
                     ids = _select_tasks(book, store, attempted, remaining_budget)
                     if not ids:
                         state = "finished" if not summary["remaining"] else "no_progress"
                         reason = "translation_complete" if state == "finished" else "no_runnable_tasks"
                         break
                     if not configured:
-                        _providers(config, options); configured = True
-                    emit("translate", "running", "正在翻译一批内容；本批结束后保存进度。")
+                        chosen, provider_config = _providers(config, options)
+                        from .translation import TranslationRoutingSession
+                        extras = [_load_provider(provider_config, options.review_provider or chosen)] if options.review else []
+                        routing_session = TranslationRoutingSession(provider_config, chosen, extra_providers=extras)
+                        configured = True
+                    metrics["current_batch_tasks"] = len(ids)
+                    emit("translate", "running", "正在翻译本批 " + str(len(ids)) + " 个任务（并发上限 " + str(options.workers) + "）；本批结束后保存进度。")
                     # Callback may have requested stop before any new request.
                     if stop_reason():
                         state, reason = "stopped", "cancelled"
@@ -549,7 +566,8 @@ def run_job(options: AutoOptions, event_callback=None) -> dict:
                     metrics["attempted_tasks"] = len(attempted)
                     try:
                         report = run_translation(book, store, config, provider=options.provider,
-                            workers=options.workers, review_provider=None, max_tasks=len(ids), task_ids=ids)
+                            workers=options.workers, review_provider=None, max_tasks=len(ids), task_ids=ids,
+                            routing_session=routing_session)
                     except Exception:
                         # Preserve failed/cooldown state. Never retry this batch
                         # in a loop or expose the provider exception's body.
@@ -573,7 +591,8 @@ def run_job(options: AutoOptions, event_callback=None) -> dict:
                     try:
                         review_view, metrics["review_scope"] = _ordinary_review_view(book)
                         reviewed = run_review(review_view, store, config, options.review_provider or options.provider,
-                            max_elements=options.max_review_elements, workers=options.workers)
+                            max_elements=options.max_review_elements, workers=options.workers,
+                            routing_session=routing_session)
                     except Exception:
                         reviewed = {}
                         metrics["review_errors"] = 1

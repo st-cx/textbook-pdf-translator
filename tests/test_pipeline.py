@@ -1247,14 +1247,16 @@ class PipelineTests(unittest.TestCase):
         book = self.book()
         store = self.store(book)
         acquire_count = [0]
-        def acquire(limiter):
+        original_acquire = translation.TranslationRoutingSession.acquire
+        def acquire(session, *args, **kwargs):
             acquire_count[0] += 1
             if acquire_count[0] == 2:
                 raise translation._Cancelled()
+            return original_acquire(session, *args, **kwargs)
         def api(provider, messages):
             packet = self.packet(messages)
             return self.envelope(packet, {"e1": "证明 ⟦F:f1⟧ 有 2 种情况。"}), {"prompt_tokens": 10, "completion_tokens": 10}
-        with patch.object(translation._Limiter, "acquire", acquire), patch.object(translation, "_chat", side_effect=api) as transport:
+        with patch.object(translation.TranslationRoutingSession, "acquire", acquire), patch.object(translation, "_chat", side_effect=api) as transport:
             result = translation.run_translation(book, store, self.config, workers=1, review_provider="deepseek")
         self.assertTrue(result["cancelled"])
         self.assertEqual((transport.call_count, result["requests"], result["interrupted_saved_elements"]), (1, 1, 1))
@@ -1274,10 +1276,12 @@ class PipelineTests(unittest.TestCase):
         book = self.book(elements)
         store = self.store(book)
         acquisitions, calls = [0], []
-        def acquire(limiter):
+        original_acquire = translation.TranslationRoutingSession.acquire
+        def acquire(session, *args, **kwargs):
             acquisitions[0] += 1
             if acquisitions[0] == 3:
                 raise translation._Cancelled()
+            return original_acquire(session, *args, **kwargs)
         def api(provider, messages):
             packet = self.packet(messages)
             calls.append(packet)
@@ -1288,7 +1292,7 @@ class PipelineTests(unittest.TestCase):
                 data["reviews"]["e0"] = {"passed": False, "issues": ["漏译否定。"]}
                 raw = json.dumps(data, ensure_ascii=False)
             return raw, {"prompt_tokens": 10, "completion_tokens": 10}
-        with patch.object(translation._Limiter, "acquire", acquire), patch.object(translation, "_chat", side_effect=api):
+        with patch.object(translation.TranslationRoutingSession, "acquire", acquire), patch.object(translation, "_chat", side_effect=api):
             result = translation.run_translation(book, store, self.config, workers=1, review_provider="deepseek")
         self.assertEqual(len(calls), 2)
         # The first bounded packet was already submitted after its review;
@@ -1305,17 +1309,19 @@ class PipelineTests(unittest.TestCase):
         book = self.book()
         store = self.store(book)
         count = [0]
-        def acquire(limiter):
+        original_acquire = translation.TranslationRoutingSession.acquire
+        def acquire(session, *args, **kwargs):
             count[0] += 1
             if count[0] == 2:
                 raise translation._Cancelled()
+            return original_acquire(session, *args, **kwargs)
         def api(provider, messages):
             packet = self.packet(messages)
             current = deepcopy(book)
             current.assets["f1"].metadata["pdf_page"] = 7
             store.register(current, {})
             return self.envelope(packet, {"e1": "证明 ⟦F:f1⟧ 有 2 种情况。"}), {"prompt_tokens": 10, "completion_tokens": 10}
-        with patch.object(translation._Limiter, "acquire", acquire), patch.object(translation, "_chat", side_effect=api):
+        with patch.object(translation.TranslationRoutingSession, "acquire", acquire), patch.object(translation, "_chat", side_effect=api):
             result = translation.run_translation(book, store, self.config, workers=1, review_provider="deepseek")
         self.assertTrue(result["cancelled"])
         self.assertEqual(result["interrupted_saved_elements"], 0)

@@ -1,12 +1,34 @@
 {
   "_default": "example",
+  "_review_default": "example-review",
   "providers": {
     "example": {
       "base_url": "https://api.example.com/v1",
       "api_key": "FILL_LOCALLY",
       "model": "your-model",
       "price_in": 2.0,
-      "price_out": 8.0
+      "price_out": 8.0,
+      "requests_per_minute": 60,
+      "max_concurrency": 8,
+      "max_attempts": 2
+    },
+    "example-backup": {
+      "base_url": "https://backup.example.com/v1",
+      "api_key": "FILL_LOCALLY",
+      "model": "your-alternative-model",
+      "requests_per_minute": 60,
+      "max_concurrency": 8,
+      "max_attempts": 2
+    },
+    "example-review": {
+      "base_url": "https://review.example.com/v1",
+      "api_key": "FILL_LOCALLY",
+      "model": "your-review-model"
+    }
+  },
+  "provider_pools": {
+    "translation-pool": {
+      "providers": ["example", "example-backup"]
     }
   }
 }

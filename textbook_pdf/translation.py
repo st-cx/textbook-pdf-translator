@@ -243,6 +243,8 @@ class Provider:
     currency: str = "CNY"
     thinking: str | None = None
     reasoning_effort: str | None = None
+    rate_limit_group: str | None = None
+    max_concurrency: int = 32
 
 
 def _load_provider(config: dict, name: str | None) -> Provider:
@@ -264,6 +266,12 @@ def _load_provider(config: dict, name: str | None) -> Provider:
         raise ValueError("Provider thinking must be enabled or disabled")
     if effort is not None and effort not in ("none", "minimal", "low", "medium", "high", "xhigh", "max", "ultra"):
         raise ValueError("Provider reasoning_effort is unsupported")
+    group = value.get("rate_limit_group")
+    if group is not None and (not isinstance(group, str) or not group.strip()):
+        raise ValueError("Provider rate_limit_group must be a nonempty string")
+    concurrency = value.get("max_concurrency", 32)
+    if type(concurrency) is not int or not 1 <= concurrency <= 32:
+        raise ValueError("Provider max_concurrency must be between 1 and 32")
     return Provider(
         str(chosen), value["base_url"].rstrip("/"), value["api_key"], value["model"],
         timeout=max(1.0, min(float(value.get("timeout", 180)), 240.0)),
@@ -274,7 +282,36 @@ def _load_provider(config: dict, name: str | None) -> Provider:
         price_out=float(value["price_out"]) if value.get("price_out") is not None else None,
         currency=str(value.get("currency", "CNY")),
         thinking=thinking, reasoning_effort=effort,
+        rate_limit_group=group, max_concurrency=concurrency,
     )
+
+
+def _load_translation_providers(config: dict, name: str | None):
+    """A pool is explicit opt-in; selecting a normal provider remains single-route."""
+    values = config.get("providers", {})
+    pools = config.get("provider_pools", {})
+    if not isinstance(values, dict) or not isinstance(pools, dict):
+        raise ValueError("providers and provider_pools must be objects")
+    chosen = name or config.get("_default") or config.get("default_provider") or values.get("_default")
+    if chosen is None:
+        chosen = next((key for key, value in values.items() if isinstance(value, dict)), None)
+    if chosen in pools:
+        if chosen in values:
+            raise ValueError("Pool and provider names must be different")
+        pool = pools[chosen]
+        members = pool.get("providers") if isinstance(pool, dict) else None
+        if (not isinstance(members, list) or not 1 <= len(members) <= 16
+                or any(not isinstance(n, str) or n not in values for n in members)
+                or len(set(members)) != len(members)):
+            raise ValueError("Pool requires 1 to 16 distinct configured provider names")
+        return chosen, [_load_provider(config, member) for member in members]
+    selected = _load_provider(config, chosen)
+    return selected.name, [selected]
+
+
+def _chat_endpoint(base_url):
+    endpoint = base_url.rstrip("/")
+    return endpoint if endpoint.endswith("/chat/completions") else endpoint + "/chat/completions"
 
 
 class _Cancelled(Exception):
@@ -323,6 +360,125 @@ class _Limiter:
             self.next_at = max(self.next_at, time.monotonic() + max(retry_after, self.interval))
 
 
+class _RoutesUnavailable(Exception):
+    """All routes failed; the source task is resumable, never permanently bad."""
+
+
+class TranslationRoutingSession:
+    """Shared capacity and route health for one run, including successive batches.
+
+    Exact aliases share a clock and capacity. Different model IDs share it when
+    rate_limit_group is configured; aliases do not create additional capacity.
+    Credentials are compared privately for account identity, never diagnostics.
+    """
+    def __init__(self, config, provider=None, stop=None, *, extra_providers=()):
+        self.name, self.providers = _load_translation_providers(config, provider)
+        self.is_pool = self.name in config.get("provider_pools", {})
+        self.stop = stop if stop is not None else threading.Event()
+        self.lock = threading.Lock()
+        self.changed = threading.Condition(self.lock)
+        self.groups, self.limiters, self.capacity = {}, {}, {}
+        self.active, self.cooldown, self.blocked, self.failures = Counter(), {}, {}, Counter()
+        self.cursor = 0
+        participants = {p.name: p for p in [*self.providers, *extra_providers]}
+        self.participants = participants
+        parents = {name: name for name in participants}
+        def find(name):
+            while parents[name] != name:
+                name = parents[name]
+            return name
+        def merge(a, b):
+            parents[find(a)] = find(b)
+        entries = list(participants.values())
+        for index, selected in enumerate(entries):
+            for other in entries[:index]:
+                same_account = (_chat_endpoint(selected.base_url) == _chat_endpoint(other.base_url)
+                                and selected.api_key == other.api_key)
+                exact_alias = selected.model == other.model
+                shared_quota = (selected.rate_limit_group is not None
+                                and selected.rate_limit_group == other.rate_limit_group)
+                if same_account and (exact_alias or shared_quota):
+                    merge(selected.name, other.name)
+        for selected in entries:
+            key = digest(sorted(n for n in participants if find(n) == find(selected.name)))
+            self.groups[selected.name] = key
+            if key not in self.limiters:
+                self.limiters[key] = _Limiter(selected.requests_per_minute, self.stop)
+                self.capacity[key] = selected.max_concurrency
+            else:
+                limiter = self.limiters[key]
+                limiter.minimum = max(limiter.minimum, 60 / selected.requests_per_minute)
+                limiter.interval = max(limiter.interval, limiter.minimum)
+                self.capacity[key] = min(self.capacity[key], selected.max_concurrency)
+
+    def matches(self, config, provider):
+        name, providers = _load_translation_providers(config, provider)
+        return name == self.name and providers == self.providers
+
+    def acquire(self, excluded=(), *, only=None):
+        excluded = set(excluded)
+        candidates = [only] if only is not None else self.providers
+        while True:
+            if self.stop.is_set():
+                raise _Cancelled()
+            delay = 1.0
+            with self.lock:
+                live = [p for p in candidates if p.name not in self.blocked and p.name not in excluded]
+                if not live:
+                    raise _RoutesUnavailable("No untried usable translation route; progress is saved")
+                now = time.monotonic()
+                for offset in range(len(candidates)):
+                    index = (self.cursor + offset) % len(candidates)
+                    selected = candidates[index]
+                    if selected not in live:
+                        continue
+                    key = self.groups[selected.name]
+                    limiter = self.limiters[key]
+                    if self.active[key] >= self.capacity[key]:
+                        continue
+                    with limiter.lock:
+                        ready = max(limiter.next_at, self.cooldown.get(key, 0.0))
+                        if ready > now:
+                            delay = min(delay, ready - now)
+                            continue
+                        # Reserve rate and capacity atomically, before HTTP starts.
+                        limiter.next_at = now + limiter.interval
+                        self.active[key] += 1
+                        if only is None:
+                            self.cursor = (index + 1) % len(candidates)
+                        return selected
+                self.changed.wait(max(.001, min(delay, 1.0)))
+
+    def release(self, selected, *, status=None, retry_after=0.0, failed=False):
+        with self.lock:
+            key = self.groups[selected.name]
+            self.active[key] -= 1
+            self.changed.notify_all()
+            if not failed:
+                self.failures[key] = 0
+                return
+            self.failures[key] += 1
+            if status in {400, 401, 402, 403, 404, 405, 415, 422}:
+                self.blocked[selected.name] = status
+                if status in {401, 402, 403}:
+                    for other in self.participants.values():
+                        if self.groups[other.name] == key:
+                            self.blocked[other.name] = status
+            else:
+                # Honor Retry-After. Never rotate aliases to evade a shared quota.
+                seconds = min(300.0, max(retry_after, 2 ** min(self.failures[key], 5)))
+                self.cooldown[key] = time.monotonic() + seconds
+
+    def snapshot(self):
+        with self.lock:
+            now = time.monotonic()
+            return {"pool": self.name, "providers": [p.name for p in self.providers],
+                    "blocked": {p.name: self.blocked[p.name] for p in self.providers if p.name in self.blocked},
+                    "cooling_down": [p.name for p in self.providers
+                                     if self.cooldown.get(self.groups[p.name], 0.0) > now],
+                    "all_blocked": all(p.name in self.blocked for p in self.providers)}
+
+
 def _retry_after(value) -> float:
     try:
         return min(300.0, max(0.0, float(value)))
@@ -335,9 +491,7 @@ def _retry_after(value) -> float:
 
 def _chat(provider: Provider, messages: list[dict]) -> tuple[str, dict]:
     """Small OpenAI-compatible adapter; no SDK dependency or secret-bearing logs."""
-    endpoint = provider.base_url
-    if not endpoint.endswith("/chat/completions"):
-        endpoint += "/chat/completions"
+    endpoint = _chat_endpoint(provider.base_url)
     payload = {"model": provider.model, "messages": messages,
                "temperature": 0.2, "max_tokens": provider.max_tokens}
     if provider.thinking is not None:
@@ -800,7 +954,7 @@ def _current_task(task, book, glossary):
     return set(task.get("element_ids", [])) == {e["id"] for e in frozen}
 
 
-def run_translation(book, store, config_path, provider=None, workers=4, review_provider=None, max_tasks=None, task_ids=None) -> dict:
+def run_translation(book, store, config_path, provider=None, workers=4, review_provider=None, max_tasks=None, task_ids=None, *, routing_session=None) -> dict:
     """Translate pending leased jobs, preserving partial progress and review state.
 
     A report's completed count concerns structural task acceptance.  Semantic
@@ -854,12 +1008,21 @@ def run_translation(book, store, config_path, provider=None, workers=4, review_p
         return report
     from pathlib import Path
     config = json.loads(Path(config_path).read_text(encoding="utf-8-sig"))
-    translation_provider = _load_provider(config, provider)
     reviewer = _load_provider(config, review_provider) if review_provider else None
-    report["provider"], report["review_provider"] = translation_provider.name, reviewer.name if reviewer else None
-    stop, counter_lock = threading.Event(), threading.Lock()
-    providers = [translation_provider] + ([reviewer] if reviewer else [])
-    limiters = {p.name: _Limiter(p.requests_per_minute, stop) for p in providers}
+    session = routing_session or TranslationRoutingSession(config, provider,
+        extra_providers=[reviewer] if reviewer else [])
+    if not session.matches(config, provider):
+        raise ValueError("Translation routing configuration changed; resume with a new session")
+    translation_provider = session.providers[0]
+    if reviewer and session.participants.get(reviewer.name) != reviewer:
+        raise ValueError("Routing session must include its inline review provider")
+    report["provider"], report["review_provider"] = session.name, reviewer.name if reviewer else None
+    report["configured_workers"] = workers
+    report["route_failovers"] = 0
+    stop, counter_lock = session.stop, threading.Lock()
+    limiters = {p.name: session.limiters[session.groups[p.name]] for p in session.providers}
+    if reviewer:
+        limiters[reviewer.name] = session.limiters[session.groups[reviewer.name]]
     element_map = book.element_map()
     task_calls = Counter()
 
@@ -877,12 +1040,15 @@ def run_translation(book, store, config_path, provider=None, workers=4, review_p
         store.record_issue(entry)
         return entry
 
-    def call(selected, messages, stage, task_id=None):
+    def call(selected, messages, stage, task_id=None, *, reserved=False):
         limiter = limiters[selected.name]
-        limiter.acquire()
+        if not reserved:
+            session.acquire(only=selected)
         at = time.perf_counter()
         with counter_lock:
             if task_id is not None and task_calls[task_id] >= TRANSLATION_TASK_MAX_REQUESTS:
+                if not reserved:
+                    session.release(selected)
                 raise _TaskRequestLimit("Per-task request hard limit reached; remaining work is pending")
             if task_id is not None:
                 task_calls[task_id] += 1
@@ -893,9 +1059,11 @@ def run_translation(book, store, config_path, provider=None, workers=4, review_p
                 "price_source": "config.json per million tokens; not live billing",
             })
             bucket["requests"] += 1
+        call_failure = None
         try:
             text, usage = _chat(selected, messages)
         except _HTTPFailure as error:
+            call_failure = error
             bump(failed_requests=1, usage_missing_calls=1)
             with counter_lock:
                 report["cost_estimate_complete"] = False
@@ -905,7 +1073,7 @@ def run_translation(book, store, config_path, provider=None, workers=4, review_p
                     "completion_tokens": 0, "estimated_cost": 0.0, "currency": selected.currency})
             if error.status == 429 or error.status >= 500:
                 limiter.throttle(error.retry_after)
-            if error.status in {401, 402, 403}:
+            if error.status in {401, 402, 403} and stage == "translation" and not session.is_pool:
                 # Authentication, credit and access failures concern the whole
                 # provider, not a paragraph. Let in-flight work finish saving,
                 # and leave unstarted tasks available for a later resumption.
@@ -913,7 +1081,8 @@ def run_translation(book, store, config_path, provider=None, workers=4, review_p
                     report['provider_blocked'] = {'provider': selected.name, 'http_status': error.status}
                 stop.set()
             raise
-        except Exception:
+        except Exception as error:
+            call_failure = error
             bump(failed_requests=1, usage_missing_calls=1)
             with counter_lock:
                 report["cost_estimate_complete"] = False
@@ -924,6 +1093,14 @@ def run_translation(book, store, config_path, provider=None, workers=4, review_p
             raise
         finally:
             bump(**{stage + "_request_seconds": time.perf_counter() - at})
+            if not reserved:
+                session.release(selected, status=getattr(call_failure, "status", None),
+                    retry_after=getattr(call_failure, "retry_after", 0.0), failed=call_failure is not None)
+                if session.snapshot()["all_blocked"]:
+                    with counter_lock:
+                        report["provider_blocked"] = {"provider": session.name,
+                            "http_status": getattr(call_failure, "status", None)}
+                    stop.set()
         limiter.success()
         inp, out = usage.get("prompt_tokens"), usage.get("completion_tokens")
         known = isinstance(inp, int) and isinstance(out, int)
@@ -942,13 +1119,55 @@ def run_translation(book, store, config_path, provider=None, workers=4, review_p
             bucket["estimated_cost"] += cost
         record = {"prompt_tokens": in_tokens, "completion_tokens": out_tokens,
                   "estimated_cost": cost, "currency": selected.currency, "usage_known": known,
-                  "stage": stage, "model": selected.model}
+                    "stage": stage, "model": selected.model, "provider": selected.name}
         if hasattr(store, "record_usage"):
             store.record_usage(task_id, selected.name, record)
         if usage.get("_truncated"):
             bump(failed_requests=1)
             raise _OutputTruncated("Provider output truncated; lower task size or increase provider max_tokens")
         return text, record
+
+    def translate_call(messages, task_id):
+        if not session.is_pool:
+            selected = session.acquire()
+            try:
+                return call(selected, messages, "translation", task_id, reserved=True)
+            finally:
+                session.release(selected)
+        tried = set()
+        for _ in session.providers:
+            try:
+                selected = session.acquire(tried)
+            except _RoutesUnavailable:
+                break
+            if tried:
+                bump(route_failovers=1)
+            tried.add(selected.name)
+            try:
+                result = call(selected, messages, "translation", task_id, reserved=True)
+            except (_Cancelled, _TaskRequestLimit):
+                session.release(selected)
+                raise
+            except _OutputTruncated:
+                session.release(selected)
+                raise  # Split the complete source groups, not a second paid full reply.
+            except _HTTPFailure as error:
+                session.release(selected, status=error.status, retry_after=error.retry_after, failed=True)
+            except (ConnectionError, TimeoutError, ValueError) as error:
+                session.release(selected, failed=True)
+            except BaseException:
+                session.release(selected)
+                raise
+            else:
+                session.release(selected)
+                return result
+        snapshot = session.snapshot()
+        if snapshot["all_blocked"]:
+            with counter_lock:
+                report["provider_blocked"] = {"provider": session.name, "routes": snapshot["blocked"]}
+            stop.set()
+        # A transport/quota error belongs to a route, not to the source text.
+        raise _RoutesUnavailable("Translation routes unavailable; resume after cooldown") from None
 
     def semantic_review(task, candidates, force_ids, lease_owner=None):
         chosen = [eid for eid in candidates if review_selected(element_map[eid]) or eid in force_ids]
@@ -1046,7 +1265,7 @@ def run_translation(book, store, config_path, provider=None, workers=4, review_p
         initial_accepted = store.translations()
         packets, deferred = _translation_packets(task,
             [eid for eid in task["element_ids"] if eid not in initial_accepted],
-            translation_provider.max_tokens)
+            min(p.max_tokens for p in session.providers))
         packets = deque(packets)
         for group in deferred:
             bump(translation_deferred_groups=1)
@@ -1056,6 +1275,7 @@ def run_translation(book, store, config_path, provider=None, workers=4, review_p
         feedback = _semantic_failure_feedback(book, store, task["element_ids"], glossary)
         required_review = set(feedback)
         buffered_valid, buffered_review,buffered_bindings = {}, set(),{}
+        result_provider = translation_provider.name
 
         def preserve_interrupted():
             """Save returned structural work through the same strict lease gate.
@@ -1076,7 +1296,7 @@ def run_translation(book, store, config_path, provider=None, workers=4, review_p
                 return
             try:
                 saved = store.submit(task["id"], owner, task["source_hash"], values,
-                                     provider=translation_provider.name)
+                                     provider=result_provider)
             except ValueError:
                 # Revoked leases/source revisions must never be bypassed by a
                 # cleanup path. Current neighbours and user-requested redo win.
@@ -1114,9 +1334,8 @@ def run_translation(book, store, config_path, provider=None, workers=4, review_p
                 accepted = store.translations()
                 missing = [eid for eid in task["element_ids"] if eid not in accepted]
                 if not missing:
-                    result = store.submit(task["id"], owner, task["source_hash"],
-                                          {eid: accepted[eid] for eid in task["element_ids"]},
-                                          provider=translation_provider.name)
+                    result = store.submit(task["id"], owner, task["source_hash"], {},
+                                          provider=result_provider)
                     if result.get("complete"):
                         bump(completed=1)
                         return
@@ -1135,10 +1354,11 @@ def run_translation(book, store, config_path, provider=None, workers=4, review_p
                 attempt = failures[request_key]
                 try:
                     bump(translation_packets=1)
-                    raw, usage = call(translation_provider, [
+                    raw, usage = translate_call([
                         {"role": "system", "content": "你是专业英文教材译者。严格遵守任务内冻结文体与术语。只翻译 requested_element_ids，保持公式标记和全部数字。只返回 response_example 形式的JSON，task_id及source_hash原样返回。不要输出只读上下文。"},
                         {"role": "user", "content": json.dumps(_request_payload(task, requested, accepted, feedback), ensure_ascii=False)},
-                    ], "translation", task["id"])
+                    ], task["id"])
+                    result_provider = usage["provider"]
                     decoded = parse_response(raw, task, requested)
                     valid, forced, feedback = {}, set(required_review), {}
                     for eid, text in decoded["translations"].items():
@@ -1190,7 +1410,7 @@ def run_translation(book, store, config_path, provider=None, workers=4, review_p
                         break
                     failed_signatures.add(signature)
                     result = store.submit(task["id"], owner, task["source_hash"], valid,
-                                          provider=translation_provider.name,
+                                          provider=result_provider,
                                           usage=None if hasattr(store, "record_usage") else usage)
                     buffered_valid = {}
                     if result.get("complete"):
@@ -1231,6 +1451,10 @@ def run_translation(book, store, config_path, provider=None, workers=4, review_p
                     break
                 except _HTTPFailure as error:
                     last_error, terminal = str(error), not error.retryable
+                except _RoutesUnavailable:
+                    last_error, terminal = "Translation routes unavailable; progress saved for resumption", False
+                    if stop.is_set():
+                        break
                 except Exception as error:
                     # Never persist exception reprs from libraries/config providers.
                     last_error = "Translation response failed validation: " + type(error).__name__
@@ -1287,11 +1511,12 @@ def run_translation(book, store, config_path, provider=None, workers=4, review_p
     if len(costs) > 1:
         report["estimated_cost"] = None
     report.update(elapsed_seconds=time.perf_counter() - started, state=store.status())
+    report["routing"] = session.snapshot()
     return report
 
 
 def _run_review_sequential(book, store, config_path, provider, max_elements=None, *,
-                           _shared_limiter=None, _shared_stop=None, _provider=None) -> dict:
+                           _shared_limiter=None, _shared_stop=None, _provider=None, _routing_session=None) -> dict:
     """Independently review accepted migrated/previous translations without retranslating.
 
     Successful verdicts bind source, formula assets, rule/glossary versions and
@@ -1317,8 +1542,31 @@ def _run_review_sequential(book, store, config_path, provider, max_elements=None
     report["price_source"] = "config.json per million tokens; not live billing"
     stop = _shared_stop if _shared_stop is not None else threading.Event()
     limiter = _shared_limiter if _shared_limiter is not None else _Limiter(selected_provider.requests_per_minute, stop)
+    def review_chat(messages):
+        if _routing_session is None:
+            limiter.acquire()
+        else:
+            _routing_session.acquire(only=selected_provider)
+        report["requests"] += 1
+        failure = None
+        try:
+            return _chat(selected_provider, messages)
+        except BaseException as error:
+            failure = error
+            raise
+        finally:
+            if _routing_session is not None:
+                _routing_session.release(selected_provider,
+                    status=getattr(failure, "status", None),
+                    retry_after=getattr(failure, "retry_after", 0.0),
+                    failed=failure is not None and not isinstance(failure, (_Cancelled, KeyboardInterrupt)))
     batches = deque(_review_batches(chosen, elements, accepted))
     while batches:
+        if _routing_session is not None and selected_provider.name in _routing_session.blocked:
+            report['provider_blocked'] = {'provider': selected_provider.name,
+                'http_status': _routing_session.blocked[selected_provider.name]}
+            report['review_pending'] += sum(len(batch) for batch in batches)
+            break
         if stop.is_set():
             report["cancelled"] = True
             report["review_pending"] += sum(len(batch) for batch in batches)
@@ -1343,9 +1591,7 @@ def _run_review_sequential(book, store, config_path, provider, max_elements=None
             for attempt in range(selected_provider.attempts):
                 accounted = False
                 try:
-                    limiter.acquire()
-                    report["requests"] += 1
-                    raw, usage = _chat(selected_provider, [
+                    raw, usage = review_chat([
                         {"role": "system", "content": "独立审校英文数学教材中译。检查漏译、误译、量词和否定、条件方向、数学含义、术语、数字、引用及文风。不要解题或改译文。只输出required_response格式JSON；passed为布尔值，issues为具体问题字符串数组。"},
                         {"role": "user", "content": json.dumps(packet, ensure_ascii=False)},
                     ])
@@ -1385,6 +1631,11 @@ def _run_review_sequential(book, store, config_path, provider, max_elements=None
                     break
                 except _Cancelled:
                     raise
+                except _RoutesUnavailable:
+                    last_error = "当前复核路线不可用，保留待审状态；其他翻译路线仍可继续"
+                    report['provider_blocked'] = {'provider': selected_provider.name,
+                        'http_status': _routing_session.blocked.get(selected_provider.name) if _routing_session else None}
+                    break  # No HTTP request was issued; do not invent usage.
                 except _OutputTruncated:
                     report["failed_requests"] += 1
                     report["review_truncated_calls"] += 1
@@ -1404,7 +1655,8 @@ def _run_review_sequential(book, store, config_path, provider, max_elements=None
                     last_error = str(error)
                     if error.status in {401, 402, 403}:
                         report['provider_blocked'] = {'provider': selected_provider.name, 'http_status': error.status}
-                        stop.set()
+                        if _routing_session is None:
+                            stop.set()
                     if error.status == 429 or error.status >= 500:
                         limiter.throttle(error.retry_after)
                     if not error.retryable:
@@ -1453,13 +1705,15 @@ def _run_review_sequential(book, store, config_path, provider, max_elements=None
     report["elapsed_seconds"] = time.perf_counter() - started
     return report
 
-def run_review(book, store, config_path, provider, max_elements=None, workers=4, *, unit_ids=None, max_units=None, argument_ids=None, max_arguments=None) -> dict:
+def run_review(book, store, config_path, provider, max_elements=None, workers=4, *, unit_ids=None, max_units=None, argument_ids=None, max_arguments=None, routing_session=None) -> dict:
     """Review disjoint current IDs with bounded workers and one provider limiter.
 
     Only temporary Book element views are partitioned; Store registration,
     source elements, frozen rules and hash-bound review identities stay intact.
     Interrupts stop future requests and let valid in-flight replies be saved.
     """
+    if routing_session is not None and (book.profile.get("argument_units_v1") or book.profile.get("semantic_review_units")):
+        raise ValueError("Shared automatic routing applies to ordinary review; use the dedicated joint-review stage")
     if book.profile.get("argument_units_v1"):
         from .argument_review_runner import run_review_with_arguments
         return run_review_with_arguments(book,store,config_path,provider,max_elements,workers,unit_ids=unit_ids,max_units=max_units,argument_ids=argument_ids,max_arguments=max_arguments)
@@ -1491,10 +1745,25 @@ def run_review(book, store, config_path, provider, max_elements=None, workers=4,
     report.update(provider=selected_provider.name, model=selected_provider.model,
                   currency=selected_provider.currency,
                   price_source="config.json per million tokens; not live billing")
-    stop = threading.Event()
-    limiter = _Limiter(selected_provider.requests_per_minute, stop)
+    if routing_session is not None:
+        if (not routing_session.matches(config, routing_session.name)
+                or routing_session.participants.get(selected_provider.name) != selected_provider):
+            raise ValueError("Routing session must include its independent review provider")
+        if selected_provider.name in routing_session.blocked:
+            report["provider_blocked"] = {"provider": selected_provider.name,
+                                          "http_status": routing_session.blocked[selected_provider.name]}
+            report["review_pending"] = len(chosen)
+            report["elapsed_seconds"] = time.perf_counter() - started
+            return report
+        stop = routing_session.stop
+        limiter = routing_session.limiters[routing_session.groups[selected_provider.name]]
+    else:
+        stop = threading.Event()
+        limiter = _Limiter(selected_provider.requests_per_minute, stop)
     initial_batches = _review_batches(chosen, elements, accepted)
-    count = min(workers, len(initial_batches))
+    capacity = (routing_session.capacity[routing_session.groups[selected_provider.name]]
+                if routing_session is not None else selected_provider.max_concurrency)
+    count = min(workers, capacity, len(initial_batches))
     report["workers_actual"] = count
     partitions = [[] for _ in range(count)]
     for index, ids in enumerate(initial_batches):
@@ -1532,7 +1801,8 @@ def run_review(book, store, config_path, provider, max_elements=None, workers=4,
         for ids in partitions:
             view = replace(book, elements=[elements[eid] for eid in ids])
             future = executor.submit(_run_review_sequential, view, store, config_path, selected_provider.name,
-                                     _shared_limiter=limiter, _shared_stop=stop, _provider=selected_provider)
+                                     _shared_limiter=limiter, _shared_stop=stop, _provider=selected_provider,
+                                     _routing_session=routing_session)
             futures[future] = ids
         remaining = set(futures)
         while remaining:

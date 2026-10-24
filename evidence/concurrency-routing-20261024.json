@@ -1,0 +1,133 @@
+{
+  "recorded_on": "2026-10-24",
+  "version": "2.0.0rc6",
+  "scope": "Translation scheduling, provider routing and resume; self-authored live controls only.",
+  "offline": {
+    "counted": 1082,
+    "passed": 1065,
+    "skipped": 17,
+    "failures": 0,
+    "errors": 0,
+    "successful": true,
+    "source_unchanged_during_tests": true,
+    "seconds": 83.369
+  },
+  "translation_concurrency_behavior": {
+    "tasks_per_case": 64,
+    "configured_and_observed_peaks": [
+      [
+        4,
+        4
+      ],
+      [
+        16,
+        16
+      ],
+      [
+        32,
+        32
+      ]
+    ],
+    "actual_store": true,
+    "mocked_http": true,
+    "subsequent_batches_completed": true,
+    "explicit_batch_cap_respected": true
+  },
+  "manual_tk_control": {
+    "default": 32,
+    "allowed_range": [
+      1,
+      32
+    ],
+    "tested_manual_values": [
+      4,
+      16,
+      32
+    ],
+    "batch_tracks_workers": true,
+    "busy_settings_frozen": true,
+    "can_change_after_safe_stop": true
+  },
+  "initial_route_probes": [
+    {
+      "model": "zcode/GLM-5.3-Flash",
+      "passed_structure": false,
+      "seconds": 7.523,
+      "http_status": 429,
+      "error_type": "_HTTPFailure"
+    },
+    {
+      "model": "aster/GLM-5.3-Flash",
+      "passed_structure": true,
+      "seconds": 5.731
+    },
+    {
+      "model": "nvidia/z-ai/glm-5.3-flash",
+      "passed_structure": true,
+      "seconds": 12.566
+    },
+    {
+      "model": "tokenrhythm/glm-5.3-flash",
+      "passed_structure": true,
+      "seconds": 5.261
+    },
+    {
+      "model": "workbuddy/glm-5.3-flash",
+      "passed_structure": true,
+      "seconds": 3.328
+    },
+    {
+      "model": "workbuddy-ai/glm-5.3-flash",
+      "passed_structure": true,
+      "seconds": 3.502
+    },
+    {
+      "model": "ai-baipiao/z-ai/glm-5.3-flash",
+      "passed_structure": false,
+      "seconds": 60.197,
+      "error_type": "ConnectionError"
+    },
+    {
+      "model": "autoclaw-cn/zai_glm-5.3-flash",
+      "passed_structure": true,
+      "seconds": 4.137
+    },
+    {
+      "model": "aster/GLM-5.3",
+      "passed_structure": true,
+      "seconds": 5.2
+    },
+    {
+      "model": "tokenrhythm/glm-5.3",
+      "passed_structure": true,
+      "seconds": 31.863
+    }
+  ],
+  "later_live_pool_control": {
+    "tasks": 4,
+    "translation_accepted": 4,
+    "independent_review_passed": 4,
+    "configured_workers": 4,
+    "observed_peak_http": 4,
+    "requests": 5,
+    "resume_requests": 0,
+    "usage_rows_before_after_resume": [
+      5,
+      5
+    ],
+    "seconds": 19.182,
+    "self_authored_only": true,
+    "full_book_or_continuous_capacity_benchmark": false
+  },
+  "new_rosen_calls": 0,
+  "installed_application_modified_during_old_run": false,
+  "hosted_ci": false,
+  "full_book_accepted": false,
+  "limits": [
+    "Catalogue presence and one successful short control do not establish sustained capacity or real model identity.",
+    "The initial zcode route returned HTTP 429; it succeeded in the later pool control.",
+    "One initial candidate timed out and was left out of the enabled pool.",
+    "Estimated price is unknown, not zero billing.",
+    "No textbook text, scans, private configuration or database is included."
+  ]
+}

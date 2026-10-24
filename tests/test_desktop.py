@@ -41,6 +41,64 @@ class _InputFixture:
 
 class DesktopInputsTests(_InputFixture, unittest.TestCase):
 
+    def test_translation_parallelism_defaults_to_32_and_batch_tracks_manual_value(self):
+        values = dict(self.values)
+        values.pop("workers")
+        options = validate_inputs(values, self.choices)
+        self.assertEqual((options["workers"], options["batch_size"]), (32, 32))
+        for number in (1, 4, 16, 32):
+            with self.subTest(number=number):
+                options = validate_inputs(dict(values, workers=str(number)), self.choices)
+                self.assertEqual((options["workers"], options["batch_size"]), (number, number))
+
+    def test_pool_is_translation_choice_and_review_stays_single_provider(self):
+        data = json.loads(self.config.read_text())
+        data.update(_default="balanced", _review_default="independent-review",
+                    provider_pools={"balanced": {"providers": ["translate", "independent-review"]}})
+        self.config.write_text(json.dumps(data), encoding="utf-8")
+        before = self.config.read_bytes()
+        choices = read_provider_choices(self.config)
+        self.assertEqual(choices.pool_names, ("balanced",))
+        self.assertEqual(choices.default, "balanced")
+        label = choices.label_for("balanced")
+        self.assertIn("多路由 / 2个供应商", label)
+        self.assertNotIn(label, choices.review_labels)
+        self.assertIsNone(choices.review_name_for(label))
+        options = validate_inputs(dict(self.values, provider=label), choices)
+        self.assertEqual(options["provider"], "balanced")
+        self.assertEqual(options["review_provider"], "independent-review")
+        with self.assertRaises(ValueError):
+            validate_inputs(dict(self.values, provider=label, review_provider=label), choices)
+        self.assertEqual(self.config.read_bytes(), before)
+        self.assertNotIn("private-example-credential", repr(choices))
+
+    def test_invalid_pools_are_rejected_without_echoing_configuration(self):
+        original = json.loads(self.config.read_text())
+        invalid = (
+            {"pool": {"providers": []}},
+            {"pool": {"providers": ["missing-private-example-credential"]}},
+            {"pool": {"providers": ["translate", "translate"]}},
+            {"translate": {"providers": ["translate"]}},
+            {"pool": ["translate"]},
+            {"pool": {"providers": "translate"}},
+            {"pool": {"providers": [1]}},
+            {"pool": {"providers": ["translate"] * 17}},
+            {" ": {"providers": ["translate"]}},
+            [], None,
+        )
+        for pools in invalid:
+            with self.subTest(pools=pools):
+                self.config.write_text(json.dumps(dict(original, provider_pools=pools)), encoding="utf-8")
+                with self.assertRaises(ValueError) as caught:
+                    read_provider_choices(self.config)
+                self.assertNotIn("private-example-credential", str(caught.exception))
+
+    def test_old_provider_choices_positional_fields_remain_compatible(self):
+        choices = ProviderChoices(("single label",), ("single",), "single", ("secret",), "single")
+        self.assertEqual(choices.review_default, "single")
+        self.assertEqual(choices.pool_names, ())
+        self.assertEqual(choices.review_labels, ("single label",))
+
     def test_configuration_is_read_only_and_keys_never_enter_choices_repr(self):
         before = self.config.read_bytes()
         choices = read_provider_choices(self.config)
@@ -226,6 +284,7 @@ class DesktopTkTests(_InputFixture, unittest.TestCase):
             self.skipTest("Tk display unavailable: " + str(exc))
         self.root.withdraw()
         self.app = DesktopApp(self.root, config_path=self.config, runner=lambda o, c: {"state": "incomplete"})
+        self.initial_workers = self.app.vars["workers"].get()
         for key, value in self.values.items():
             self.app.vars[key].set(value)
 
@@ -273,6 +332,62 @@ class DesktopTkTests(_InputFixture, unittest.TestCase):
         self.assertIn("已安全停止", self.app.status.get())
         self.assertEqual(str(self.app.provider_combo.cget("state")), "readonly")
         self.assertIn("reading.pdf", self.app.log.get("1.0", "end"))
+
+    def test_manual_translation_parallelism_widgets_4_16_32_and_resume(self):
+        self.assertEqual(self.initial_workers, "32")
+        self.assertEqual(str(self.app.workers_spin.cget("state")), "normal")
+        seen = []
+        for number in (4, 16, 32):
+            release = threading.Event()
+
+            def runner(options, callback):
+                seen.append(options)
+                release.wait(2)
+                return {"state": "stopped"}
+
+            self.app.worker.runner = runner
+            self.app.workers_spin.delete(0, "end")
+            self.app.workers_spin.insert(0, str(number))
+            self.app.start_button.invoke()
+            self.assertEqual(str(self.app.workers_spin.cget("state")), "disabled")
+            self.pump_until(lambda: len(seen) == (4, 16, 32).index(number) + 1)
+            self.assertEqual((seen[-1]["workers"], seen[-1]["batch_size"]), (number, number))
+            self.app.stop_button.invoke()
+            self.assertTrue(seen[-1]["cancel_event"].is_set())
+            release.set()
+            self.pump_until(lambda: not self.app._busy)
+            self.assertEqual(str(self.app.workers_spin.cget("state")), "normal")
+
+    def test_pool_default_translation_and_real_review_selection_in_actual_widgets(self):
+        data = json.loads(self.config.read_text())
+        data.update(_default="balanced", _review_default="independent-review",
+                    provider_pools={"balanced": {"providers": ["translate", "independent-review"]}})
+        self.config.write_text(json.dumps(data), encoding="utf-8")
+        self.app.vars["provider"].set("")
+        self.app.vars["review_provider"].set("")
+        self.app.load_config()
+        pool_label = self.app.choices.label_for("balanced")
+        self.assertEqual(self.app.vars["provider"].get(), pool_label)
+        self.assertIn(pool_label, self.app.provider_combo.cget("values"))
+        self.assertNotIn(pool_label, self.app.review_provider_combo.cget("values"))
+        self.assertEqual(self.app.choices.review_name_for(self.app.vars["review_provider"].get()), "independent-review")
+        seen = []
+        self.app.worker.runner = lambda opts, cb: seen.append(opts) or {"state": "incomplete"}
+        self.app.start_button.invoke()
+        self.pump_until(lambda: not self.app._busy)
+        self.assertEqual(seen[0]["provider"], "balanced")
+        self.assertEqual(seen[0]["review_provider"], "independent-review")
+        self.app.vars["provider"].set(self.app.choices.label_for("translate"))
+        self.app.load_config()
+        self.assertEqual(self.app.choices.name_for(self.app.vars["provider"].get()), "translate")
+
+    def test_pool_without_dedicated_review_falls_back_to_real_provider(self):
+        self.config.write_text(json.dumps({"_default": "one-pool", "providers": {
+            "single": {"model": "route/model"}}, "provider_pools": {
+            "one-pool": {"providers": ["single"]}}}), encoding="utf-8")
+        self.app.load_config()
+        self.assertEqual(self.app.choices.name_for(self.app.vars["provider"].get()), "one-pool")
+        self.assertEqual(self.app.choices.review_name_for(self.app.vars["review_provider"].get()), "single")
 
     def test_file_and_existing_job_buttons_are_simulated(self):
         with patch("textbook_pdf.desktop.filedialog.askopenfilename", return_value=str(self.pdf)):

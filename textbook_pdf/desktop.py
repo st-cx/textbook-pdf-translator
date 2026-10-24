@@ -43,12 +43,25 @@ class ProviderChoices:
     default: str | None
     secrets: tuple[str, ...] = field(default=(), repr=False)
     review_default: str | None = None
+    pool_names: tuple[str, ...] = ()
 
     def name_for(self, label: str) -> str | None:
         return self.names[self.labels.index(label)] if label in self.labels else None
 
     def label_for(self, name: str | None) -> str:
         return self.labels[self.names.index(name)] if name in self.names else ""
+
+    @property
+    def review_labels(self) -> tuple[str, ...]:
+        return tuple(label for label, name in zip(self.labels, self.names) if name not in self.pool_names)
+
+    @property
+    def review_names(self) -> tuple[str, ...]:
+        return tuple(name for name in self.names if name not in self.pool_names)
+
+    def review_name_for(self, label: str) -> str | None:
+        name = self.name_for(label)
+        return name if name not in self.pool_names else None
 
 
 def read_provider_choices(path: str | Path) -> ProviderChoices:
@@ -60,21 +73,36 @@ def read_provider_choices(path: str | Path) -> ProviderChoices:
     if not isinstance(data, dict) or not isinstance(data.get("providers"), dict):
         raise ValueError("配置文件中没有可用的模型，请先填写配置文件。")
     providers = data["providers"]
-    names = tuple(str(k) for k, v in providers.items() if isinstance(v, dict))
-    if not names:
+    single_names = tuple(str(k) for k, v in providers.items() if isinstance(v, dict))
+    if not single_names:
         raise ValueError("配置文件中没有可用的模型，请先填写配置文件。")
+    pools = data.get("provider_pools", {})
+    if not isinstance(pools, dict):
+        raise ValueError("多路由配置无效，请检查供应商池设置。")
+    for name, pool in pools.items():
+        if not isinstance(name, str) or not name.strip() or name in providers or not isinstance(pool, dict):
+            raise ValueError("多路由配置无效，名称应独立且不能与单个供应商重名。")
+        members = pool.get("providers")
+        if (not isinstance(members, list) or not 1 <= len(members) <= 16
+                or any(not isinstance(member, str) or member not in single_names for member in members)
+                or len(set(members)) != len(members)):
+            raise ValueError("多路由配置无效，每组应包含1至16个不重复的已有供应商。")
+    pool_names = tuple(pools)
+    names = single_names + pool_names
     secrets = tuple(v["api_key"] for v in providers.values()
                     if isinstance(v, dict) and isinstance(v.get("api_key"), str)
                     and v["api_key"])
     labels = tuple(safe_message(f"{name}  ·  {providers[name].get('model') or '未填写模型'}", secrets)
-                   for name in names)
+                   for name in single_names)
+    labels += tuple(safe_message(f"{name}  ·  多路由 / {len(pools[name]['providers'])}个供应商", secrets)
+                    for name in pool_names)
     default = data.get("_default") or data.get("default_provider") or providers.get("_default")
     if default not in names:
         default = names[0]
     review_default = data.get("_review_default")
-    if review_default not in names:
+    if review_default not in single_names:
         review_default = None
-    return ProviderChoices(labels, names, default, secrets, review_default)
+    return ProviderChoices(labels, names, default, secrets, review_default, pool_names)
 
 
 def safe_message(value: object, secrets: tuple[str, ...] = ()) -> str:
@@ -117,7 +145,7 @@ def validate_inputs(values: dict, choices: ProviderChoices, *, draft_only=False)
         except (ValueError, TypeError):
             raise ValueError("页码请填 1-20,25 这样的格式；留空处理整本。") from None
     try:
-        workers = int(values.get("workers", 8))
+        workers = int(values.get("workers", 32))
     except (TypeError, ValueError):
         raise ValueError("同时处理数量须为 1 到 32 的整数。") from None
     if not 1 <= workers <= 32:
@@ -127,7 +155,7 @@ def validate_inputs(values: dict, choices: ProviderChoices, *, draft_only=False)
         raise ValueError("请选择复核程度。")
     review, limit = REVIEW_LEVELS[level]
     provider = choices.name_for(str(values.get("provider", "")))
-    review_provider = choices.name_for(str(values.get("review_provider", "")))
+    review_provider = choices.review_name_for(str(values.get("review_provider", "")))
     if not draft_only and provider is None:
         raise ValueError("请选择配置文件中的翻译模型。")
     if not draft_only and review and review_provider is None:
@@ -138,7 +166,7 @@ def validate_inputs(values: dict, choices: ProviderChoices, *, draft_only=False)
     return {
         "pdf": str(pdf) if pdf else None, "out": str(out),
         "config_path": str(config) if config.is_file() else None, "provider": provider,
-        "review_provider": review_provider, "workers": workers, "batch_size": 8,
+        "review_provider": review_provider, "workers": workers, "batch_size": workers,
         "pages": pages or None, "review": False if draft_only else review,
         "max_review_elements": limit, "max_tasks": 0 if draft_only else None,
         "draft": True,
@@ -223,7 +251,7 @@ class DesktopApp(ttk.Frame):
         self.vars = {name: tk.StringVar(master, value=value) for name, value in {
             "pdf": "", "out": str(job or ""), "pages": "",
             "config": str(config_path or APP_ROOT / "config.json"),
-            "provider": "", "review_provider": "", "workers": "8",
+            "provider": "", "review_provider": "", "workers": "32",
             "review_level": "快速抽查",
         }.items()}
         self.status = tk.StringVar(master, "选择 PDF 或已有任务目录，然后开始。")
@@ -273,8 +301,9 @@ class DesktopApp(ttk.Frame):
         ttk.Label(self, text="处理与复核").grid(row=9, column=0, sticky="w")
         self._setting(ttk.Combobox(controls, textvariable=self.vars["review_level"],
             values=tuple(REVIEW_LEVELS), state="readonly", width=12), "readonly").pack(side="left")
-        ttk.Label(controls, text="   同时处理").pack(side="left")
-        self._setting(ttk.Spinbox(controls, textvariable=self.vars["workers"], from_=1, to=32, width=5)).pack(side="left", padx=8)
+        ttk.Label(controls, text="   翻译并发").pack(side="left")
+        self.workers_spin = self._setting(ttk.Spinbox(controls, textvariable=self.vars["workers"], from_=1, to=32, width=5))
+        self.workers_spin.pack(side="left", padx=8)
         ttk.Label(controls, text="份任务").pack(side="left")
         ttk.Label(self, text="抽查能发现部分问题；阅读稿生成不代表整本验收通过。", foreground="#555555").grid(
             row=10, column=1, columnspan=2, sticky="w", pady=(0, 10))
@@ -315,14 +344,18 @@ class DesktopApp(ttk.Frame):
             if show_error:
                 messagebox.showerror("配置未就绪", str(exc), parent=self.master)
             return False
-        previous = {name: self.choices.name_for(self.vars[name].get()) for name in ("provider", "review_provider")}
+        previous = {"provider": self.choices.name_for(self.vars["provider"].get()),
+                    "review_provider": self.choices.review_name_for(self.vars["review_provider"].get())}
         self.choices = choices
         for name in ("provider", "review_provider"):
-            getattr(self, name + "_combo").configure(values=choices.labels)
-            chosen = previous[name] if previous[name] in choices.names else choices.default
+            labels = choices.review_labels if name == "review_provider" else choices.labels
+            names = choices.review_names if name == "review_provider" else choices.names
+            getattr(self, name + "_combo").configure(values=labels)
+            fallback = choices.default if choices.default in names else next(iter(names), None)
+            chosen = previous[name] if previous[name] in names else fallback
             # Prefer a dedicated review role if the configuration already contains it.
-            if name == "review_provider" and previous[name] not in choices.names:
-                peer = choices.review_default or next((n for n in choices.names if n.endswith("-review")), None)
+            if name == "review_provider" and previous[name] not in names:
+                peer = choices.review_default or next((n for n in names if n.endswith("-review")), None)
                 chosen = peer or chosen
             self.vars[name].set(choices.label_for(chosen))
         return True
