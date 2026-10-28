@@ -151,13 +151,25 @@ class RequestChunks(unittest.TestCase):
         self.assertEqual(set(s.translations()), {'e2'})
         self.assertEqual(r['completed'], 0)
 
-    def test_oversize_semantic_group_is_deferred_without_source_slicing(self):
-        b, s, _ = self.fixture(7, group=lambda i: 'one-large-definition')
-        with patch.object(tr, '_chat', side_effect=AssertionError('No request allowed')):
-            r = tr.run_translation(b, s, self.config, provider='mock', workers=1)
-        self.assertEqual(r['requests'], 0)
-        self.assertEqual(r['translation_deferred_groups'], 1)
-        self.assertEqual(s.translations(), {})
+    def test_oversize_source_group_uses_bounded_requests_with_complete_readonly_context(self):
+        b, s, task = self.fixture(7, group=lambda i: 'one-large-definition')
+        calls = []
+        def api(provider, messages):
+            p = self.packet(messages)
+            calls.append(p['requested_element_ids'])
+            self.assertEqual(p['source_hash'], task['source_hash'])
+            context = p['payload']['readonly_source_groups'][0]
+            self.assertEqual(context['member_ids'], task['element_ids'])
+            self.assertTrue(context['readonly'])
+            for row, frozen in zip(context['elements'], task['payload']['elements']):
+                self.assertTrue(row['readonly'])
+                self.assertEqual({k: v for k, v in row.items() if k != 'readonly'}, frozen)
+            return self.good(p)
+        r = self.run_api(b, s, api)
+        self.assertEqual(calls, [[f'e{i}' for i in range(6)], ['e6']])
+        self.assertEqual(r['translation_deferred_groups'], 0)
+        self.assertEqual(r['completed'], 1)
+        self.assertEqual(set(s.translations()), set(task['element_ids']))
 
     def test_provider_budget_changes_packet_size_without_slicing_source(self):
         b, s, task = self.fixture(8)

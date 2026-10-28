@@ -38,6 +38,33 @@
   }
 }
 
+#let page-preview-status(settings) = context {
+  let page = here().position().page
+  let records = query(<tb-trace>).map(it => it.value)
+  let ends = (:)
+  for item in records.filter(it => it.type == "element" and it.phase == "end") {
+    ends.insert(item.id, item.page)
+  }
+  let matching = records.filter(it => it.type == "element" and it.phase == "start"
+    and it.page <= page and ends.at(it.id, default: it.page) >= page)
+  let ids = matching.map(it => it.id).dedup()
+  let sources = matching.map(it => it.source_page).dedup()
+  let unresolved = settings.preview_source_diagnostics.filter(it =>
+    if it.element_id != none { ids.contains(it.element_id) }
+    else { it.page == none or sources.contains(it.page) })
+  let missing = settings.preview_untranslated_ids.any(it => ids.contains(it))
+  let label = "阅读稿（未验收）"
+  if missing { label += " · 本页含未译原文" }
+  if records.any(it => it.type == "native-retained-label" and it.page == page
+    and it.retained.reason == "translated_label_overflow_preview") {
+    label += " · 部分图内标签保留原文"
+  }
+  if unresolved.len() > 0 {
+    label += " · 另有 " + str(unresolved.len()) + " 项来源待核（详见报告）"
+  }
+  text(size: 8.5pt, fill: rgb("b83a24"), label)
+}
+
 #let book-style(settings, body) = {
   set page(
     width: settings.width * 1pt, height: settings.height * 1pt,
@@ -45,13 +72,7 @@
              top: settings.top * 1pt, bottom: settings.bottom * 1pt),
     footer: align(right)[#page-sources()], footer-descent: 16pt,
     header: if settings.preview {
-      align(right)[
-        #text(size: 8pt, fill: rgb("b83a24"), "未完成翻译或解析预览")
-        #if settings.source_error_summary != "" {
-          linebreak()
-          text(size: 8.5pt, fill: rgb("b83a24"), settings.source_error_summary)
-        }
-      ]
+      align(right)[#page-preview-status(settings)]
     } else { none },
   )
   set text(font: (settings.body_font, "Microsoft YaHei", "Libertinus Serif"),
@@ -69,6 +90,51 @@
 )[#trace("asset", id, "object", width, height: height, element-id: element-id, render-format: path.split(".").last())#if path.ends-with(".pdf") {
   image(path, width: width, height: height, page: pdf-page)
 } else { image(path, width: width, height: height) }]
+
+// A probe is allowed only in an intermediate preview compile. Python must
+// replace it with a verified native label and compile/query the final source.
+#let figure-label-decision(id, decision, measurement) = context {
+  let p = here().position()
+  [#metadata((type: if decision == "probe" { "figure-label-overflow-probe" } else { "figure-label-decision" },
+    id: id, decision: decision, measurement: measurement,
+    page: p.page, x: p.x / 1pt, y: p.y / 1pt)) <tb-trace>]
+}
+
+// Preview-only missing labels keep their original native PDF text and color.
+// Contained protected objects are explicitly nested, never counterfeit traces.
+#let retained-native-label(id, source-page, source-label, path, width, height, retained) = box(width: width, height: height, clip: true)[
+  #trace("element", id, "start", width, source-page: source-page, source-label: source-label)
+  #context {
+    let p = here().position()
+    [#metadata((type: "native-retained-label", id: id, retained: retained,
+      page: p.page, x: p.x / 1pt, y: p.y / 1pt, width: width / 1pt, height: height / 1pt)) <tb-trace>]
+    if retained.reason == "translated_label_overflow_preview" {
+      figure-label-decision(id, "retained_native_overflow", retained.overflow_measurement)
+    }
+  }
+  #place(top + left)[#image(path, width: width, height: height)]
+  #place(top + left, dy: height)[#trace("element", id, "end", width, source-page: source-page, source-label: source-label)]
+]
+
+#let native-source-frame(id, source-page, source-label, width, height) = box(width: width, height: height)[
+  #trace("element", id, "start", width, source-page: source-page, source-label: source-label)
+  #place(top + left, dy: height)[#trace("element", id, "end", width, source-page: source-page, source-label: source-label)]
+]
+
+#let label-blank-expansion(id, proof) = context {
+  let p = here().position()
+  [#metadata((type: "label-blank-expansion", id: id, proof: proof,
+    page: p.page, x: p.x / 1pt, y: p.y / 1pt)) <tb-trace>]
+}
+
+#let native-spatial-punctuation(path, width, height, retained) = box(width: width, height: height)[
+  #context {
+    let p = here().position()
+    [#metadata((type: "native-spatial-punctuation", retained: retained,
+      page: p.page, x: p.x/1pt, y: p.y/1pt, width: width/1pt, height: height/1pt)) <tb-trace>]
+  }
+  #image(path, width: width, height: height)
+]
 
 // Decisions are measured once by Python, then frozen for the final compile.
 // Never condition a break on its own live balanced-column position.

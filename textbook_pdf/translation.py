@@ -29,7 +29,7 @@ from .century_policy import century_policy_fields, frozen_century_policy_matches
 from .argument_units import argument_member_fields, frozen_argument_matches, task_context as argument_task_context
 
 PROTOCOL_VERSION = 2
-TRANSLATION_PACKET_MAX_IDS = 6
+TRANSLATION_PACKET_MAX_IDS = 6  # Per-request limit; a source group may be larger.
 TRANSLATION_TASK_MAX_REQUESTS = 128  # Includes translation and inline review.
 TASK_ASSET_SCHEMA = "protected-assets-v2"
 REVIEW_HASH_SCHEMA = "relevant-glossary-v2"
@@ -835,12 +835,45 @@ def _glossary_issues(element, text: str, glossary: dict) -> list[dict]:
     return found
 
 
+def _frozen_source_groups(task):
+    """Contiguous source groups from the signed task, including saved members.
+
+    Group identity alone cannot bridge a chapter boundary or source-page gap.
+    This is request context derivation; it never rewrites the canonical task.
+    """
+    groups, previous = [], None
+    for row in task["payload"]["elements"]:
+        same_group = (previous is not None and row.get("group_id")
+                      and row.get("group_id") == previous.get("group_id")
+                      and row.get("chapter") == previous.get("chapter")
+                      and row["page"] - previous["page"] in (0, 1))
+        if not same_group:
+            groups.append([])
+        groups[-1].append(row)
+        previous = row
+    return groups
+
+
 def _request_payload(task, requested, accepted, feedback=None):
     payload = dict(task["payload"])
     # The envelope still binds the full canonical DB task hash. Geometry proves
     # source identity to Store/agents; the model needs only read-only math text.
     payload.pop("protected_asset_descriptors", None)
     payload["elements"] = [e for e in payload["elements"] if e["id"] in requested]
+    wanted = set(requested)
+    # A large question can require several bounded replies. Every such reply
+    # sees the COMPLETE frozen question/choices, including already saved and
+    # future members, without requesting translations of those read-only rows.
+    # The Store envelope still carries the original whole-task source hash.
+    source_groups = [group for group in _frozen_source_groups(task)
+                     if len(group) > TRANSLATION_PACKET_MAX_IDS
+                     and any(row["id"] in wanted for row in group)]
+    if source_groups:
+        payload["readonly_source_groups"] = [
+            {"group_id": group[0].get("group_id"), "chapter": group[0].get("chapter"),
+             "member_ids": [row["id"] for row in group], "readonly": True,
+             "elements": [dict(deepcopy(row), readonly=True) for row in group]}
+            for group in source_groups]
     frozen = task["payload"]["elements"]
     positions = [i for i, row in enumerate(frozen) if row["id"] in requested]
     if positions:
@@ -865,36 +898,33 @@ def _request_payload(task, requested, accepted, feedback=None):
 
 
 def _translation_packets(task, requested, max_tokens):
-    """Size requests without changing the canonical task or cutting groups.
+    """Size requests without changing the canonical task or cutting elements.
 
     The output estimate is deliberately conservative, not a token guarantee.
     Explicit provider truncation is handled by splitting these groups further.
-    A group exceeding the ID limit is deferred rather than silently divided.
+    A source group exceeding the ID limit uses complete elements as request
+    units. _request_payload supplies its complete frozen read-only context.
+    Independent argument/semantic review units retain their existing routing.
     """
     wanted = set(requested)
     rows = task["payload"]["elements"]
     if wanted - {row["id"] for row in rows}:
         raise ValueError("Requested packet contains a foreign source ID")
     groups = []
-    previous = None
-    for row in rows:
-        same_group = (previous is not None and row.get("group_id")
-                      and row.get("group_id") == previous.get("group_id")
-                      and row.get("chapter") == previous.get("chapter")
-                      and row["page"] - previous["page"] in (0, 1))
-        if not same_group:
-            groups.append([])
-        if row["id"] in wanted:
-            groups[-1].append(row["id"])
-        previous = row
+    for source_group in _frozen_source_groups(task):
+        missing = [row["id"] for row in source_group if row["id"] in wanted]
+        if len(source_group) > TRANSLATION_PACKET_MAX_IDS:
+            # These are transport units, not invented independent proof units.
+            # Singleton source elements let explicit truncation bisect a packet
+            # while each element, task hash and full question context survive.
+            groups.extend([eid] for eid in missing)
+        elif missing:
+            groups.append(missing)
     by_id = {row["id"]: row for row in rows}
     budget = max(128, int(max_tokens) // 2 - 128)
     packets, packet, deferred, estimate = [], [], [], 0
     for group in groups:
         if not group:
-            continue
-        if len(group) > TRANSLATION_PACKET_MAX_IDS:
-            deferred.append(group)
             continue
         group_estimate = sum(96 + 2 * len(by_id[eid]["text"]) for eid in group)
         if packet and (sum(map(len, packet)) + len(group) > TRANSLATION_PACKET_MAX_IDS

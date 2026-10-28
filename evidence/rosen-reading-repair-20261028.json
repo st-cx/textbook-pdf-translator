@@ -1,0 +1,208 @@
+{
+  "schema": "rosen-reading-repair-aggregate-v1",
+  "recorded_at_utc": "2026-10-28T11:52:11.679350+00:00",
+  "source_revision": "source-v72",
+  "source_book_sha256": "c09c244a9bd51329e6a387c1264b5925bfe786d754465be95e86b6ed1527aa41",
+  "translation_snapshot_time_utc": "2026-10-28T11:24:13.558936+00:00",
+  "old_draft": {
+    "source_pages": 1118,
+    "actual_page_count": 1542,
+    "translated_elements": 24074,
+    "displayed_translated_elements": 20450,
+    "required_translations": 28582,
+    "untranslated_elements": 4508,
+    "fallback_source_page_count": 189,
+    "pdf_bytes": 110558460,
+    "actual_pdf_sha256": "7d8825ab36f460bc16a2008b17286e334ac8f95af2f3a1f6b9e27f16e552a069",
+    "hidden_stored_translations": 3624
+  },
+  "revised_draft": {
+    "source_pages": 1118,
+    "page_count": 1462,
+    "translated_elements": 26269,
+    "required_translations": 28579,
+    "untranslated_elements": 2310,
+    "displayed_translated_elements": 25331,
+    "native_retained_label_count": 334,
+    "source_diagnostics": 1748,
+    "fallback_source_page_count": 37,
+    "hidden_stored_translations": 938,
+    "pdf_bytes": 210896478,
+    "pdf_sha256": "0e73750afe770a12e27bb71081e3249b395a4b892082e8b5921af646537a7a86",
+    "translated_labels_retained_original": 113
+  },
+  "render_snapshot_filters": {
+    "rejection_counts": {
+      "stale_source": 62,
+      "stale_rule": 27,
+      "unresolved_current_revision_veto": 5
+    },
+    "warning_counts": {
+      "numeric_order_changed": 1
+    },
+    "current_accepted_required_before_filters": 26274
+  },
+  "retained_original_pages_by_failure_code_nonexclusive": {
+    "CompositionError": 20,
+    "missing_asset_trace": 8,
+    "missing_layout_trace": 8,
+    "asset_too_wide": 5,
+    "detached_caption": 1,
+    "asset_out_of_page": 3
+  },
+  "layout_seconds": 1473.452,
+  "final_build_seconds": 1480.576,
+  "cached_parts_reused": 0,
+  "merge": {
+    "garbage": 2,
+    "deflate": true,
+    "merge_seconds": 37.543,
+    "save_seconds": 2.038
+  },
+  "exact_font_program_reuse": {
+    "schema": "font-program-stream-exact-dedup-v1",
+    "font_descriptors": 44305,
+    "font_references": 44257,
+    "pointer_changes": 43847,
+    "duplicate_stream_xrefs": 43847,
+    "elapsed_seconds": 10.025541,
+    "only_font_descriptor_program_pointers_changed": true
+  },
+  "source_page_mapping": {
+    "source_pages": 1118,
+    "all_sources_have_output": true,
+    "all_outputs_have_sources": true,
+    "range_checked_against_actual_pdf": true
+  },
+  "source_integrity_scope": {
+    "native_presence_counted": 52401,
+    "native_presence_passed": 52401,
+    "unit": "protected assets checked for native glyph presence",
+    "is_whole_formula_ink_or_semantic_acceptance": false
+  },
+  "independent_agent_semantic_sample": {
+    "items": 12,
+    "groups": 6,
+    "source_pages": [
+      74,
+      236,
+      373,
+      486,
+      815,
+      918
+    ],
+    "complete_group_members_read": 53,
+    "material_semantic_errors_found": 0,
+    "wording_or_punctuation_notes": 3,
+    "items_on_retained_original_pages": 0,
+    "reviewed_translation_hashes_match_final_snapshot": true,
+    "semantic_passes_written": 0,
+    "human_review_claimed": false,
+    "whole_book_acceptance": false
+  },
+  "bounded_deferred_group_recovery": {
+    "tasks_scheduled": 133,
+    "batches": 5,
+    "new_current_required": 2077,
+    "requests": 505,
+    "failed_requests": 32,
+    "input_tokens_with_reported_usage": 6074371,
+    "output_tokens_with_reported_usage": 740623,
+    "usage_missing_calls": 32,
+    "actual_price_known": false,
+    "failures_preserved": true
+  },
+  "test_receipt": "source-regressions-20261028-reading-recovery-v2.json",
+  "whole_book_formula_pixels_checked": false,
+  "whole_book_semantics_accepted": false,
+  "whole_book_visual_acceptance": false,
+  "full_book_accepted": false,
+  "remaining_known_layout_examples_source_pages": [
+    153,
+    330,
+    395,
+    396,
+    464,
+    1003,
+    1055
+  ],
+  "rebuild_api_calls": 0,
+  "rebuild_database_writes": 0,
+  "textbook_content_or_private_paths_included": false,
+  "final_output_risk_checks": {
+    "pdf_sha256": "0e73750afe770a12e27bb71081e3249b395a4b892082e8b5921af646537a7a86",
+    "source_pages_selected": [
+      112,
+      118,
+      126,
+      153,
+      182,
+      330,
+      395,
+      396,
+      464,
+      559,
+      608,
+      851,
+      1003,
+      1055
+    ],
+    "independent_agent_visual_review": {
+      "risk_output_pngs_covered": 26,
+      "new_or_changed_pngs_directly_viewed": 6,
+      "identical_pngs_bound_to_prior_direct_inspection": 20,
+      "root_additional_output_pages_directly_viewed": [
+        193,
+        444,
+        634,
+        693
+      ],
+      "known_not_passed": {
+        "p153": "原生跨行A³/集合画布阅读次序未修",
+        "p182": "表头局部原文保留；证明数字/分数和等式块关系仍碎散",
+        "p330": "求和上下限/被加项拆开且跨输出页，数学关系未闭环",
+        "p395": "图2编号与描述跨页",
+        "p396": "Step1应有单点未见；Step2并列图件变竖散，递归图示未保持",
+        "p464": "肖像重复",
+        "p1003": "孤立小卡及跨行答案画布次序",
+        "p1055": "图顶点数字脱离、题图错栏与大留白",
+        "p126": "保留先前整画布31像素风险，本次不关闭",
+        "p118": "旧图字节相同，保留原生公式画布和习题7提示歧义记录；没有进行新语义审校"
+      },
+      "report_sha256": "0d5fd9a15a31d16d5507b18c7308bd310c043b01a82ba97e658a6467f3890373",
+      "human_visual_review_claimed": false,
+      "full_book_visual_acceptance": false
+    },
+    "protected_asset_crop_vs_final_pdf_pixels": {
+      "checked_occurrences": 678,
+      "automatically_passed_occurrences": 669,
+      "warning_occurrences": 9,
+      "eligible_measured_occurrences": 681,
+      "unavailable_measured_occurrences": 3,
+      "assets_without_measurement": 18,
+      "skipped_total": 21,
+      "eligible_source_assets": 699,
+      "issue_counts": {
+        "visual_asset_trace_missing": 18,
+        "visual_asset_comparison_unavailable": 3,
+        "visual_asset_ink_mismatch": 9
+      },
+      "warning_source_pages": [
+        153,
+        608,
+        1003,
+        1055
+      ],
+      "report_sha256": "48c2194da7c9e51a85162818bf844c0c67b91cecf1cfbcb72e08b975daf365b0",
+      "triage_report_sha256": "10601732b81c54373b9b4b7b54fcf0d77d335a21154b93fbd99a9160b80da087",
+      "manual_triage_converts_automatic_passes": false,
+      "certifies_original_crop_completeness": false,
+      "certifies_mathematical_meaning": false,
+      "whole_book_formula_acceptance": false
+    },
+    "no_new_serious_occlusion_seen_in_bounded_label_patch_review": true,
+    "reviewed_at_utc": "2026-10-28T12:09:48.839803+00:00",
+    "all_risk_pages_passed": false,
+    "full_book_acceptance": false
+  }
+}
