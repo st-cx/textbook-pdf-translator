@@ -14,9 +14,11 @@ Keep original mathematical objects and reflow translated Chinese at stable role-
 
 Reading previews keep only an overflowing diagram label in its verified native English when fixed-size Chinese cannot fit its measured safe area. Other translated text remains visible; the retained label is excluded from the displayed-Chinese count. Strict composition continues to reject the unresolved label.
 
-**2.0.0-rc.7 is a candidate release. No large textbook has completed full-book translation and final visual acceptance.** The internal Rosen source-v72 covers 1,118 original pages and requires 28,579 translated elements. It retains 1,748 source diagnostics. Accepted translation records do not mean independent semantic or visual acceptance. See [current progress](docs/ROSEN_PROGRESS.md) and [reading-draft repairs](docs/READING_REPAIR.md).
+**2.0.0-rc.8 is a candidate release. No large textbook has completed full-book translation and final visual acceptance.** The internal Rosen source-v73 covers 1,118 original pages and requires 28,579 translated elements. It retains 1,748 source diagnostics. Accepted translation records do not mean independent semantic or visual acceptance. See [current progress](docs/ROSEN_PROGRESS.md) and [reading-draft repairs](docs/READING_REPAIR.md).
 
-This release adds native ink envelopes measured from the original embedded font program, glyph ID and full 2×2 text matrix, followed by actual saved-object identity checks. It preserves italic overhangs and terminal strokes without changing the structural box or shrinking text. Unknown identity, unsupported rotation and missing embedded fonts remain explicit source issues. Source, ink, mathematical relationships, semantics and composed-output checks remain separate.
+The pipeline includes native ink envelopes measured from the original embedded font program, glyph ID and full 2×2 text matrix, followed by actual saved-object identity checks. It preserves italic overhangs and terminal strokes without changing the structural box or shrinking text. Unknown identity, unsupported rotation and missing embedded fonts remain explicit source issues. Source, ink, mathematical relationships, semantics and composed-output checks remain separate.
+
+Repeatedly invalid packets no longer prevent later packets from running. Their failures remain recorded and the task request limit is unchanged. [Convergence review (Chinese)](docs/CONVERGENCE.md)
 
 Translation requests contain at most six complete element IDs. Larger source groups use bounded packets with the complete frozen group supplied as read-only context; independent argument review keeps its original route. Canonical task identity and source hashes remain unchanged. Truncation splits eligible packets; a truncated singleton remains pending. Successful partial results survive interruption, with a per-task limit of 128 requests including inline review. Optional provider thinking/effort fields are omitted by default; no global reasoning mode is disabled.
 
@@ -36,7 +38,7 @@ powershell -ExecutionPolicy Bypass -File .\安装依赖.ps1
 .\.venv\Scripts\python.exe translate_pdf.py "book.pdf" --stage prepare --pages 1-3 --out "sample" --no-legacy-import
 ```
 
-Current local source regressions: **1,082 tests, 1,065 passed, 17 optional skips, zero failures/errors**, with matching pre/post source and fixture hashes. This is local validation, not hosted GitHub CI or full-book acceptance. [Bound receipt](evidence/source-regressions-20261024-concurrency-routing-v2.json)
+The rc.8 local regression results are bound to exact pre/post source and fixture hashes. This is local validation, not hosted GitHub CI or full-book acceptance. [Latest bound receipt](evidence/source-regressions-20261030-convergence-v2.json)
 
 The earlier 24-page/7-page digital and 3-page unindexed scan samples are historical rc.2 results. Their 796/796 and 421/421 pixel passes compare composed output with the source crops then used, not those crops with the original book. Newly discovered source-crop risks have not been repaired in those historical outputs. The [original authored demo](examples/original-demo) proves known Book/Store structure to composition, not OCR, automatic extraction or translation-model quality.
 

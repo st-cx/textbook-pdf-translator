@@ -2319,6 +2319,7 @@ def analyze(pdf_path, outdir, pages=None, backend="auto", *, ocr="auto", ocr_dpi
         book = Book(str(path),file_sha256(path),doc.metadata.get("title") or path.stem,len(doc),selected)
         parser_files=[Path(__file__),Path(__file__).with_name("babel_adapter.py"),Path(__file__).with_name("table_adapter.py"),Path(__file__).with_name("paragraph_adapter.py"),Path(__file__).with_name("math_regions.py"),Path(__file__).with_name("glyph_geometry.py"),Path(__file__).with_name("drawing_geometry.py"),Path(__file__).with_name("source_flow.py"),Path(__file__).with_name("native_clipping.py"),Path(__file__).with_name("cross_page_math.py"),Path(__file__).with_name("native_containers.py"),Path(__file__).with_name("native_operators.py")]
         parser_files.append(Path(__file__).with_name("native_ink_geometry.py"))
+        parser_files.append(Path(__file__).with_name("native_units.py"))
         from .babel_adapter import available as babel_available, layout_model_identity
         signature=digest({"source":book.source_sha256,"selected_pages":selected,"backend":backend,"rules":RULES_VERSION,
                           "schema":book.schema_version,"babeldoc":babel_available(),
@@ -2670,6 +2671,14 @@ def analyze(pdf_path, outdir, pages=None, backend="auto", *, ocr="auto", ocr_dpi
             _promote_formula_prose(page_elements)
             _assemble_display_math(book,doc,page,outdir,page_elements,glyphs)
             frontmatter_role=_repair_page_structure(book,doc,page,outdir,page_elements,lines,glyphs)
+            from .native_units import repair_native_units, resolve_proved_source_warnings
+            native_units=repair_native_units(book,doc,page,outdir,page_elements,glyphs)
+            if native_units['applied']:
+                book.profile.setdefault('native_unit_repairs',[]).extend(native_units['applied'])
+                resolve_proved_source_warnings(book,native_units['applied'])
+            for pending in native_units['unresolved']:
+                _issue(book,'source_native_unit_unverified',json.dumps(pending,ensure_ascii=False),
+                       number,pending.get('element_id'),severity=pending.get('severity','warning'))
             _attach_inline_vector_symbols(book,doc,page,outdir,page_elements,glyphs,drawings)
             _order_exercise_markers(page_elements)
             _check_atomic_formulas(book,page_elements)

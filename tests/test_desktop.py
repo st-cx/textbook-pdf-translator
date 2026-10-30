@@ -457,6 +457,18 @@ class DesktopTkTests(_InputFixture, unittest.TestCase):
         self.assertEqual(seen[0]["max_tasks"], 0)
         self.assertIn("不代表整本验收通过", self.app.detail.get())
 
+    def test_done_displays_actual_reading_result_not_only_saved_progress(self):
+        self.app.detail.set("已保存 100 / 100 段")
+        message = "阅读稿实际显示中文 75 / 100 项；未译或未采用 0 项；整页原文 3 页；已存但显示原文的标签 2 项。"
+        self.app.worker.events.put(("done", {
+            "state": "incomplete", "summary": {"accepted": 100, "total": 100},
+            "message": message, "pdf_path": "synthetic-reading.pdf"}))
+        self.root.after_cancel(self.app._after_id)
+        self.app._poll()
+        self.assertIn(message, self.app.detail.get())
+        self.assertIn("不代表整本验收通过", self.app.detail.get())
+        self.assertIn(message, self.app.log.get("1.0", "end"))
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -443,6 +443,39 @@ class AutopilotTests(unittest.TestCase):
         self.assertIsNone(result["pdf_path"])
         self.assertNotIn("阅读稿可查看", events[-1]["message"])
 
+    def test_saved_translations_with_render_fallback_are_incomplete(self):
+        original_draft = self.draft
+        def fallback_draft(*args, **kwargs):
+            return {**original_draft(*args, **kwargs), "required_translations": 3,
+                    "displayed_translated_elements": 1, "fallback_source_pages": [2],
+                    "not_displayed_translated_label_count": 1,
+                    "native_retained_label_count": 1, "source_diagnostics": 2}
+        self.draft = fallback_draft
+        events = []
+        result, _ = self.run_job(callback=events.append)
+        self.assertEqual(result["summary"]["accepted"], 3)
+        self.assertEqual(result["state"], "incomplete", result)
+        self.assertEqual(result["reason"], "draft_requires_attention")
+        self.assertEqual(result["draft"]["displayed_translated_elements"], 1)
+        self.assertEqual(result["draft"]["not_displayed_translated_label_count"], 1)
+        self.assertIn("实际显示中文 1 / 3", result["message"])
+        self.assertIn("整页原文 1", result["message"])
+        self.assertIn("已存但显示原文的标签 1", result["message"])
+        self.assertEqual(events[-1]["message"], result["message"])
+        saved = json.loads((self.out / "autopilot_status.json").read_text(encoding="utf-8"))
+        self.assertEqual(saved["draft"], result["draft"])
+
+    def test_current_draft_counts_survive_zero_translation_budget(self):
+        original_draft = self.draft
+        self.draft = lambda *a, **k: {**original_draft(*a, **k),
+            "required_translations": 3, "displayed_translated_elements": 0,
+            "fallback_source_pages": [1, 2, 3], "source_diagnostics": 4}
+        result, _ = self.run_job(self.options(max_tasks=0))
+        self.assertEqual(result["state"], "budget_reached")
+        self.assertEqual(result["draft"].get("displayed_translated_elements"), 0)
+        self.assertIn("未译或未采用 3", result["message"])
+        self.assertEqual(self.calls, [])
+
     def test_streaming_book_save_unicode_newlines_without_second_load(self):
         self.book.title = "原创数学：集合与映射 α→β"
         self.book.elements[0].text = "Unicode 原生文字与小数 0.125"

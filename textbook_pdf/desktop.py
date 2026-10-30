@@ -465,7 +465,13 @@ class DesktopApp(ttk.Frame):
                               or value.get("output_pdf") or summary.get("output_pdf"))
                     if output:
                         self._append_log("阅读稿：" + str(output))
-                    self.detail.set("可打开任务目录查看阅读稿和待处理报告；生成成功不代表整本验收通过。")
+                    detail = value.get("message")
+                    if isinstance(detail, str) and detail:
+                        detail = safe_message(detail, self.choices.secrets)
+                        self._append_log(detail)
+                        self.detail.set(detail + " 生成成功不代表整本验收通过。")
+                    else:
+                        self.detail.set("可打开任务目录查看阅读稿和待处理报告；生成成功不代表整本验收通过。")
                 elif kind == "error":
                     self._set_busy(False)
                     error_type, error_text = value

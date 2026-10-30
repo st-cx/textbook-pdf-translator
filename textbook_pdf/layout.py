@@ -32,6 +32,21 @@ _EXERCISE_LABEL_RE = re.compile(r"^(\s*(?:[∗*†‡]{0,3}\s*\d+[.)]|\([a-zA-Z0
 class CompositionError(RuntimeError):
     """Composition could not produce a faithful, auditable document."""
 
+    def __init__(self, *args, code=None, element_id=None, asset_id=None):
+        super().__init__(*args)
+        self.code, self.element_id, self.asset_id = code, element_id, asset_id
+
+    def safe_diagnostic(self):
+        """Only known categories and opaque IDs may leave a private exception."""
+        if self.code not in {'label_source_bounds', 'native_punctuation_identity',
+                             'oversized_source_unit'}:
+            return {}
+        result = {'code': self.code}
+        for key, value in (('element_id', self.element_id), ('asset_id', self.asset_id)):
+            if isinstance(value, str) and re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9_.-]{0,159}', value):
+                result[key] = value
+        return result
+
 
 def rendering_binding(book: Book, translations: dict) -> dict:
     """Identity of document inputs and compositor files, for stale-output QA."""
@@ -227,6 +242,106 @@ def _prepare_assets(book, outdir):
     return paths
 
 
+def _label_source_frame(label, background, book, cache, *, translated_text=None):
+    """Validate a label frame without changing source geometry or background.
+
+    Ordinarily, only proved empty nominal font padding may be intersected
+    with the background after every native glyph's ink is verified inside.
+    A separate, tightly bounded case permits an accepted Chinese translation
+    of a proved complete roman prose word to use the legacy top-clamped
+    anchor. Its fixed-size Chinese must still fit the actual Typst measure;
+    outside native ink is recorded, never licensed for clipped retention.
+    Both branches preserve the original frame and font/gid/matrix proof.
+    """
+    frame = list(label.metadata.get('source_label_bbox', label.bbox))
+    bounds = background.bbox
+    if (frame[0] >= bounds[0] - .5 and frame[1] >= bounds[1] - .5 and
+            frame[2] <= bounds[2] + .5 and frame[3] <= bounds[3] + .5):
+        return frame, None
+    proofs = cache.setdefault('__label_source_frame_proofs__', {})
+    # A Chinese-only anchor permission must never leak into native retention.
+    cache_key = (label.id, 'translated' if translated_text is not None else 'native',
+                 digest(translated_text) if translated_text is not None else None)
+    if cache_key in proofs:
+        proof = proofs[cache_key]
+        return proof['render_label_bbox'], proof
+    import pymupdf
+    from .extraction import _collect
+    from .native_ink_geometry import measure_selected_native_ink
+    source = Path(book.source_path).resolve()
+    if not cache.get('__label_source_frame_source_verified__'):
+        if not source.is_file() or file_sha256(source) != book.source_sha256:
+            raise CompositionError(f'图内标签 {label.id} 的固定字号框超出原图，来源身份无法核验', code='label_source_bounds', element_id=label.id, asset_id=background.id)
+        cache['__label_source_frame_source_verified__'] = True
+    owned = set(label.metadata.get('glyph_ids', []))
+    for aid in set(label.asset_ids) | set(TOKEN_RE.findall(label.text)):
+        asset = book.assets.get(aid)
+        if asset is None or asset.page != label.page:
+            raise CompositionError(f'图内标签 {label.id} 的固定字号框超出原图，公式身份不完整', code='label_source_bounds', element_id=label.id, asset_id=background.id)
+        owned.update(asset.metadata.get('glyph_ids', []))
+    with pymupdf.open(source) as original:
+        page = original[label.page - 1]
+        _, glyphs = _collect(page)
+        selected = [g for g in glyphs if g['id'] in owned and g['c'].strip()]
+        if not owned or owned - {g['id'] for g in glyphs} or not selected:
+            raise CompositionError(f'图内标签 {label.id} 的固定字号框超出原图，字形身份不完整', code='label_source_bounds', element_id=label.id, asset_id=background.id)
+        measured = measure_selected_native_ink(page, glyphs, {g['id'] for g in selected},
+                                               immutable_source_sha256=book.source_sha256)
+        ink = [g.get('native_ink_bbox') for g in selected]
+        if measured['unverified'] or len(measured['verified']) != len(selected) or any(not rect for rect in ink):
+            raise CompositionError(f'图内标签 {label.id} 的固定字号框超出原图，需要修正版面', code='label_source_bounds', element_id=label.id, asset_id=background.id)
+        inside = all(rect[0] >= bounds[0] - .0002 and rect[1] >= bounds[1] - .0002 and
+                     rect[2] <= bounds[2] + .0002 and rect[3] <= bounds[3] + .0002 for rect in ink)
+        # A bounded compatibility case: a complete explicitly detached prose
+        # word may sit slightly above an overly tight source background. Only
+        # its accepted Chinese may use the former y=0 anchor, after the actual
+        # fixed-size Typst measurement. Native copies keep strict ink bounds.
+        word = label.text.strip()
+        operators = {'sin','cos','tan','cot','sec','csc','arcsin','arccos','arctan','sinh','cosh','tanh',
+                     'log','ln','exp','lim','limsup','liminf','max','min','inf','sup','arg','det','dim',
+                     'ker','gcd','lcm','mod','rank','null','span','sgn','diag','tr','trace'}
+        roman = all(isinstance(g.get('font'), str) and bool(g['font']) and not (int(g.get('flags', 0)) & 2) and
+                    not re.search(r'italic|oblique|symbol|(?:^|[_-])ext|(?:^|[_-])size\d', g.get('font', ''), re.I) and
+                    (not re.search(r'math|cmsy|cmex|cmmi|msam|msbm', g.get('font', ''), re.I) or
+                     re.fullmatch(r'(?:[A-Z]{6}\+)?STIXMathJax[_-]Main-Regular', g.get('font', '')))
+                    for g in selected)
+        top_word = (not inside and isinstance(translated_text, str) and
+                    bool(re.search(r'[\u3400-\u9fff]', translated_text)) and not TOKEN_RE.search(translated_text) and
+                    label.kind == 'figure_label' and label.metadata.get('recognition') == 'detached-source-label' and
+                    label.metadata.get('role') == 'translated_figure_label' and
+                    label.metadata.get('source_text') == label.text and label.metadata.get('translatable') is not False and
+                    not label.metadata.get('literal') and not label.asset_ids and not TOKEN_RE.search(label.text) and
+                    bool(re.fullmatch(r'[A-Za-z\u00c0-\u024f]{2,}', word)) and word.casefold() not in operators and
+                    ''.join(g['c'] for g in selected) == word and roman and
+                    len({v['identity']['font_program_sha256'] for v in measured['verified']}) == 1 and
+                    0 < bounds[1] - frame[1] <= 2.0 and
+                    frame[0] >= bounds[0] - .0002 and frame[2] <= bounds[2] + .0002 and frame[3] <= bounds[3] + .0002 and
+                    all(rect[0] >= bounds[0] - .0002 and rect[1] >= bounds[1] - 1.0 and
+                        rect[2] <= bounds[2] + .0002 and rect[3] <= bounds[3] + .0002 for rect in ink))
+        if not inside and not top_word:
+            raise CompositionError(f'图内标签 {label.id} 的固定字号框超出原图，需要修正版面', code='label_source_bounds', element_id=label.id, asset_id=background.id)
+    render = ([frame[0], bounds[1], frame[2], bounds[1] + frame[3] - frame[1]] if top_word else
+              [max(frame[0], bounds[0]), max(frame[1], bounds[1]), min(frame[2], bounds[2]), min(frame[3], bounds[3])])
+    if render[3] > bounds[3] + .0002:
+        raise CompositionError(f'图内标签 {label.id} 的固定字号框超出原图，需要修正版面', code='label_source_bounds', element_id=label.id, asset_id=background.id)
+    if render[2] <= render[0] or render[3] <= render[1]:
+        raise CompositionError(f'图内标签 {label.id} 的固定字号框超出原图，需要修正版面', code='label_source_bounds', element_id=label.id, asset_id=background.id)
+    proof = {'element_id': label.id, 'source_page': label.page, 'source_pdf_sha256': book.source_sha256,
+             'background_id': background.id, 'background_sha256': background.sha256,
+             'source_label_bbox': frame, 'background_bbox': list(bounds), 'render_label_bbox': render,
+             'all_native_ink_inside_background': inside, 'source_ink': measured,
+             'method': ('proved-small-top-only-roman-word-chinese-anchor-v1' if top_word else
+                        'native-full-matrix-ink-proved-empty-nominal-padding-v1'),
+             'background_enlarged': False, 'source_geometry_modified': False}
+    if top_word:
+        proof.update(requires_chinese_fit=True, native_fallback_allowed=False,
+                     tolerances_pt={'nominal_top': 2.0, 'actual_ink_top': 1.0},
+                     anchor_strategy='legacy-top-clamped-chinese-only',
+                     translation_hash=digest(translated_text), fixed_font_size_pt=8.5)
+    proofs[cache_key] = proof
+    return render, proof
+
+
 def _prepare_native_label_previews(book, translations, outdir, *, overflow_measurements=None):
     """Keep missing diagram labels as original native ink in previews only.
 
@@ -250,13 +365,18 @@ def _prepare_native_label_previews(book, translations, outdir, *, overflow_measu
     directory = outdir / "native-labels"
     directory.mkdir(exist_ok=True)
     records = {}
+    frame_cache = {}
     with pymupdf.open(source) as original:
         glyph_pages = {}
         for label in labels:
             covered = Counter(TOKEN_RE.findall(label.text))
             covered.update({aid: max(0, label.asset_ids.count(aid) - covered[aid])
                             for aid in set(label.asset_ids)})
-            bbox = pymupdf.Rect(label.metadata.get("source_label_bbox", label.bbox))
+            parent = book.element_map().get(label.metadata['parent_figure_id'])
+            background = (book.assets.get(parent.asset_ids[0]) if parent is not None and len(parent.asset_ids) == 1 else None)
+            frame, frame_proof = (_label_source_frame(label, background, book, frame_cache)
+                                  if background is not None else (label.metadata.get('source_label_bbox', label.bbox), None))
+            bbox = pymupdf.Rect(frame)
             for aid in covered:
                 asset = book.assets.get(aid)
                 if asset is None or asset.page != label.page:
@@ -316,6 +436,8 @@ def _prepare_native_label_previews(book, translations, outdir, *, overflow_measu
                 "clip_path": target.relative_to(outdir).as_posix(), "clip_sha256": file_sha256(target),
                 "covered_asset_ids": list(covered), "covered_asset_occurrences": dict(covered),
                 "precision": "measured-native-label", "reason": "untranslated_preview"}
+            if frame_proof:
+                records[label.id]['source_frame_proof'] = frame_proof
             if explicit:
                 records[label.id].update(reason="translated_label_overflow_preview",
                     translation_hash=digest(translations[label.id]), translation_displayed=False,
@@ -669,6 +791,20 @@ def _associated_groups(elements, texts, book, geometry, profile):
         for e in group:
             if e.kind == "table" and e.metadata.get("table_grid"):
                 natural_width = max(natural_width, sum(_table_column_minima(e, book, profile)))
+            if e.kind == "exercise":
+                number = _EXERCISE_LABEL_RE.match(texts[e.id])
+                if number and not TOKEN_RE.search(number[0]):
+                    size = _font_size(e, profile)
+                    label = number[1].strip()
+                    label_width = max(size * 1.6, len(label) * size * .53 + size * .35)
+                    owned_assets = set(e.asset_ids) | set(TOKEN_RE.findall(texts[e.id]))
+                    widest = max((book.assets[aid].width for aid in owned_assets
+                                  if aid in book.assets), default=0)
+                    # This is the same real number/body grid used below.
+                    # Its number column consumes width before any protected
+                    # expression can be placed; never scale that expression.
+                    if widest:
+                        natural_width = max(natural_width, widest + label_width)
         if width < natural_width <= full_width:
             columns, width = 1, full_width
             inset = 0
@@ -685,7 +821,7 @@ def _associated_groups(elements, texts, book, geometry, profile):
             keep = len(group) > 1 and estimated <= available * .48
         if element.metadata.get("layout_spatial_unit"):
             if estimated > available:
-                raise CompositionError("原尺寸图形/公式空间单元连同图注超过整页，需要明确续排边界")
+                raise CompositionError("原尺寸图形/公式空间单元连同图注超过整页，需要明确续排边界", code='oversized_source_unit', element_id=element.id)
             keep = True
         if any(e.kind == "table" and e.metadata.get("table_grid") for e in group):
             # The final translated row heights can exceed a source-based
@@ -1223,7 +1359,7 @@ def _figure_labels_markup(element, texts, book, paths, width, profile, issues, l
         raise CompositionError(f'图内标签 {element.id} 的来源或背景不完整')
     background = book.assets[element.asset_ids[0]]
     if background.width > width + .5:
-        raise CompositionError(f'图 {element.id} 及其标签需要完整栏宽，原尺寸不能压缩')
+        raise CompositionError(f'图 {element.id} 及其标签需要完整栏宽，原尺寸不能压缩', code='oversized_source_unit', element_id=element.id, asset_id=background.id)
     aw, ah = background.width, background.height
     content = ['#place(top + left)[' + _asset_markup(background.id, element.id, book, paths, aw, issues) + ']']
     for child in children:
@@ -1233,7 +1369,7 @@ def _figure_labels_markup(element, texts, book, paths, width, profile, issues, l
             x, y = source_bbox[0] - background.bbox[0], source_bbox[1] - background.bbox[1]
             w, h = source_bbox[2] - source_bbox[0], source_bbox[3] - source_bbox[1]
             if x < -.5 or y < -.5 or x + w > aw + .5 or y + h > ah + .5:
-                raise CompositionError(f"未译标签 {child.id} 的原尺寸裁片超出图形区域")
+                raise CompositionError(f"未译标签 {child.id} 的原尺寸裁片超出图形区域", code='label_source_bounds', element_id=child.id, asset_id=background.id)
             label = labels.get(child.page, source_label(child)) if labels else source_label(child)
             markup = '#retained-native-label(' + ', '.join((_q(child.id), str(child.page), _q(label),
                 _q(retained["clip_path"]), _number(w) + 'pt', _number(h) + 'pt',
@@ -1249,12 +1385,21 @@ def _figure_labels_markup(element, texts, book, paths, width, profile, issues, l
         value = texts.get(child.id, '')
         if not value and child.id not in preview_ids:
             raise CompositionError(f'图内标签 {child.id} 尚未翻译')
-        w = child.bbox[2] - child.bbox[0]
-        h = max(child.bbox[3] - child.bbox[1] + 2, profile['caption_size'] * 1.4)
-        x = child.bbox[0] - background.bbox[0]
-        y = max(0, child.bbox[1] - background.bbox[1] - 1)
-        if x < -.5 or x + w > aw + .5 or y + h > ah + .5:
-            raise CompositionError(f'图内标签 {child.id} 的固定字号框超出原图，需要修正版面')
+        frame, frame_proof = _label_source_frame(child, background, book, paths,
+                                               translated_text=value if child.id not in preview_ids and
+                                               abs(profile['caption_size'] - 8.5) < .000001 else None)
+        w = frame[2] - frame[0]
+        h = max(frame[3] - frame[1] + 2, profile['caption_size'] * 1.4)
+        x = frame[0] - background.bbox[0]
+        y = max(0, frame[1] - background.bbox[1] - 1)
+        # The synthetic line-height allowance is not actual rendered ink.
+        # Reject genuinely outside source frames, then measure within the
+        # height still available at the label's unchanged source position.
+        if (x < -.5 or x + w > aw + .5 or
+                frame[3] - background.bbox[1] > ah + .5 or y >= ah):
+            raise CompositionError(f'图内标签 {child.id} 的固定字号框超出原图，需要修正版面', code='label_source_bounds', element_id=child.id, asset_id=background.id)
+        requested_height = h
+        h = min(h, ah - y)
         body = _text_markup(value or child.text, child, book, paths, w, issues)
         label = labels.get(child.page, source_label(child)) if labels else source_label(child)
         color = str(child.style.get('color', '202730')).lstrip('#')
@@ -1268,7 +1413,9 @@ def _figure_labels_markup(element, texts, book, paths, width, profile, issues, l
                         ', json(bytes(' + _q(_q(proof)) + '))) }; ') if proof else ''
         measurement = '(source_page: ' + str(child.page) + ', original_width: ' + _number(w) + ', safe_width: ' + _number(safe_width) + \
                       ', chosen_width: label-width / 1pt, measured_height: measured.height / 1pt, max_height: ' + _number(h) + \
-                      ', font_size: ' + _number(profile['caption_size']) + ', translation_hash: ' + _q(digest(value)) + ')'
+                      ', requested_max_height: ' + _number(requested_height) + \
+                      ', font_size: ' + _number(profile['caption_size']) + ', translation_hash: ' + _q(digest(value)) + \
+                      (', source_frame_proof: json(bytes(' + _q(_q(frame_proof)) + '))' if frame_proof else '') + ')'
         if paths.get("__allow_label_overflow_preview__"):
             failed = ('figure-label-decision(' + _q(child.id) + ', "probe", ' + measurement + '); '
                       'box(width: label-width, height: ' + _number(h) + 'pt)[]')
@@ -1304,12 +1451,20 @@ def _native_spatial_punctuation(element, literal, book, paths):
     covered_ids = {gid for aid in set(element.asset_ids) | set(TOKEN_RE.findall(element.text))
                    for gid in book.assets[aid].metadata.get("glyph_ids", [])}
     owned_ids = set(element.metadata.get("glyph_ids", [])) - covered_ids
+    source_literal = TOKEN_RE.sub('', element.text).strip()
+    # Only the six explicit prose punctuation pairs are interchangeable.
+    # The immutable source glyph itself is retained at its original origin;
+    # text, token identities and requested translation remain unchanged.
+    equivalent = str.maketrans({'，': ',', '。': '.', '；': ';', '：': ':', '！': '!', '？': '?'})
+    if (not source_literal or not re.fullmatch(r'[.,;:，。；：!?！？]{1,3}', source_literal)
+            or source_literal.translate(equivalent) != literal.translate(equivalent)):
+        raise CompositionError(f"公式 {element.id} 的裸标点缺少唯一的原书字形位置证据", code='native_punctuation_identity', element_id=element.id)
     with pymupdf.open(source) as original:
         page = original[element.page - 1]
         _, glyphs = _collect(page)
-        selected = [g for g in glyphs if g["id"] in owned_ids and g["c"] in literal]
-        if ''.join(g["c"] for g in selected) != literal:
-            raise CompositionError(f"公式 {element.id} 的裸标点缺少唯一的原书字形位置证据")
+        selected = [g for g in glyphs if g["id"] in owned_ids and g["c"] in source_literal]
+        if ''.join(g["c"] for g in selected) != source_literal:
+            raise CompositionError(f"公式 {element.id} 的裸标点缺少唯一的原书字形位置证据", code='native_punctuation_identity', element_id=element.id)
         bbox = pymupdf.Rect(selected[0]["bbox"])
         for glyph in selected[1:]:
             bbox |= pymupdf.Rect(glyph["bbox"])
@@ -1333,6 +1488,8 @@ def _native_spatial_punctuation(element, literal, book, paths):
         "source_pdf_sha256": book.source_sha256, "glyph_ids": [g['id'] for g in selected],
         "clip_path": target.relative_to(root).as_posix(), "clip_sha256": file_sha256(target),
         "native_selection": selection, "native_identity": native,
+        "source_literal": source_literal, "requested_literal": literal,
+        "punctuation_equivalence": "identical" if source_literal == literal else "finite-ascii-cjk-prose-pairs-v1",
         "precision": "measured-native-punctuation"}
     cache[key] = record
     return record
@@ -1344,7 +1501,7 @@ def _spatial_native_markup(group, texts, book, paths, geometry, width, profile, 
     canvas_width, canvas_height = bbox[2] - bbox[0], bbox[3] - bbox[1]
     if (canvas_width > width + .1 or
             canvas_height > geometry["height"] - geometry["top"] - geometry["bottom"]):
-        raise CompositionError("原尺寸图形/公式空间单元超过当前正文区域，需要源关系或纸型修复")
+        raise CompositionError("原尺寸图形/公式空间单元超过当前正文区域，需要源关系或纸型修复", code='oversized_source_unit', element_id=group[0].id)
     content = []
     for element in group:
         if element.kind == "caption":
@@ -1642,7 +1799,13 @@ def _build_source(book, translations, outdir, geometry, paths, allow_incomplete,
     for element in book.elements:
         anchor = element.metadata.get("anchor_id")
         if element.metadata.get("role") == "exercise_marker" and anchor in lookup and lookup[anchor].kind == "exercise":
-            markers[anchor].append(element)
+            number = _EXERCISE_LABEL_RE.match(texts[anchor])
+            if number and not TOKEN_RE.search(number[0]):
+                markers[anchor].append(element)
+            else:
+                issues.append({"code": "exercise_marker_anchor_not_numbered", "severity": "warning",
+                    "element_id": element.id, "anchor_id": anchor, "page": element.page,
+                    "detail": "标记的来源关联没有可渲染题号；保留原生标记独立位置，不从排版流静默移除。"})
     attached_markers = {e.id for group in markers.values() for e in group}
     rail_anchors, rail_ids = {}, set()
     for index, page in enumerate(book.pages):

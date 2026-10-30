@@ -22,6 +22,27 @@ class ReadingDraftCancelled(RuntimeError):
     """All completed parts are cached; the previous merged PDF is untouched."""
 
 
+def _failure_reason_labels(codes):
+    """Reader-facing reasons use a fixed Chinese vocabulary, never raw codes."""
+    vocabulary = {
+        'label_source_bounds': '图内标签的原始位置超出图形范围',
+        'native_punctuation_identity': '公式旁标点的原始字形位置尚未核实',
+        'oversized_source_unit': '原始图形或公式单元超过可用版面',
+        'asset_out_of_page': '内容超出页面边界',
+        'rendered_object_outside_page': '内容超出页面边界',
+        'text_outside_page': '内容超出页面边界',
+        'asset_too_wide': '原始公式、图形或代码超出栏宽',
+        'code_too_wide': '原始公式、图形或代码超出栏宽',
+        'missing_layout_trace': '部分内容缺少实际排版位置记录',
+        'missing_asset_trace': '部分内容缺少实际排版位置记录',
+        'detached_caption': '图注未与图表同页',
+        'detached_explanation': '图表与相关说明距离过远',
+    }
+    labels = [vocabulary.get(code, '其他排版问题') if isinstance(code, str) else '其他排版问题'
+              for code in codes] if isinstance(codes, list) else []
+    return list(dict.fromkeys(labels)) or ['其他排版问题']
+
+
 def _atomic_json(path, value):
     path = Path(path)
     temporary = path.with_name('.' + path.name + '.' + uuid.uuid4().hex + '.tmp')
@@ -288,6 +309,7 @@ def compose_reading_draft(book, translations, outdir, output_path=None,
                 emit('已保留原书空白页',source_pages=selected)
                 return
         cause = None
+        composition_diagnostic = {}
         failures = []
         try:
             binding = _part_binding(subset, translations, outdir)
@@ -332,11 +354,16 @@ def compose_reading_draft(book, translations, outdir, output_path=None,
             # Exception text can include private paths or provider data. The
             # report needs a stable category, not an unfiltered traceback.
             cause = cause or type(error).__name__
+            if isinstance(error, layout.CompositionError):
+                composition_diagnostic = error.safe_diagnostic()
+                if composition_diagnostic:
+                    failures.append(composition_diagnostic)
         failure_codes=sorted({i['code'] for i in failures if isinstance(i.get('code'),str)})
         element_ids=sorted({i['element_id'] for i in failures if isinstance(i.get('element_id'),str)})
         asset_ids=sorted({i['asset_id'] for i in failures if isinstance(i.get('asset_id'),str)})
         failure_events.append({'source_pages':list(selected),'reason':cause,
-            'failure_codes':failure_codes,'element_ids':element_ids,'asset_ids':asset_ids})
+            'failure_codes':failure_codes,'element_ids':element_ids,'asset_ids':asset_ids,
+            'composition_diagnostic':composition_diagnostic})
         cuts=[i for i in range(1,len(selected)) if position[selected[i]] not in blocked_cuts]
         if cuts:
             middle=min(cuts,key=lambda i:abs(i-len(selected)/2))
@@ -479,12 +506,19 @@ def compose_reading_draft(book, translations, outdir, output_path=None,
     missing_by_page=Counter(e.page for e in book.elements if e.id in missing_ids)
     source_by_page=Counter(i.get('page') for i in source_errors)
     retained_translated_by_page=Counter(e.page for e in book.elements if e.id in not_displayed_labels)
+    fallback_reasons = {}
+    for part in parts:
+        if part['mode'] == 'retained_original':
+            for p in part['source_pages']:
+                fallback_reasons[p] = _failure_reason_labels(part.get('failure_codes', []))
     rows=[]
     for p in expected:
         state=('原书空白页，保留页码对应关系' if p in blank_pages else
                '本页排版未完成，完整保留原文' if p in fallback else
                f'仍有 {missing_by_page[p]} 项未译' if missing_by_page[p] else
                '当前已存译文均已显示；仍待成品检查')
+        if p in fallback_reasons:
+            state += '；原因：' + '、'.join(fallback_reasons[p])
         if retained_translated_by_page[p]:
             state=(f'有 {retained_translated_by_page[p]} 条已存图内译文未显示，本稿保留原文；'
                    + (f'另有 {missing_by_page[p]} 项未译；' if missing_by_page[p] else '')

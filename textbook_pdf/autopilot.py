@@ -628,13 +628,48 @@ def run_job(options: AutoOptions, event_callback=None) -> dict:
                     state, reason = "incomplete", "review_requires_attention"
                 if metrics.get("review_errors") and state == "finished":
                     state, reason = "incomplete", "review_unavailable"
+                if draft is not None and state == "finished":
+                    displayed = draft.get("displayed_translated_elements")
+                    required = draft.get("required_translations")
+                    if (draft.get("fallback_source_pages")
+                            or draft.get("not_displayed_translated_label_count")
+                            or draft.get("untranslated_elements")
+                            or draft.get("source_diagnostics")
+                            or (type(displayed) is int and type(required) is int
+                                and displayed < required)):
+                        state, reason = "incomplete", "draft_requires_attention"
                 result = {"state": state, "status": state, "reason": reason, "job_dir": str(out),
                           "pdf_path": summary["output_pdf"], "output_pdf": summary["output_pdf"],
                           "summary": dict(summary), "metrics": metrics, "preview": True, "accepted": False}
                 if draft is not None:
-                    result["draft"] = {k: draft.get(k) for k in ("pdf_path", "page_count", "source_pages", "required_translations", "translated_elements", "untranslated_elements", "fallback_source_pages", "report_path", "html_report_path", "preview", "accepted")}
+                    result["draft"] = {k: draft.get(k) for k in (
+                        "pdf_path", "page_count", "source_pages", "required_translations",
+                        "translated_elements", "displayed_translated_elements", "untranslated_elements",
+                        "fallback_source_pages", "native_retained_label_count",
+                        "not_displayed_translated_label_count", "source_diagnostics",
+                        "source_diagnostics_by_code", "report_path", "html_report_path", "preview", "accepted")}
                 final_message = ("进度已保存，阅读稿可查看；待处理问题保留在报告中。" if summary["output_pdf"]
                                  else "进度已保存，可继续翻译或单独生成阅读稿。")
+                if draft is not None:
+                    pieces = []
+                    displayed, required = draft.get("displayed_translated_elements"), draft.get("required_translations")
+                    if type(displayed) is int and type(required) is int:
+                        pieces.append(f"阅读稿实际显示中文 {displayed:,} / {required:,} 项")
+                    missing = draft.get("untranslated_elements")
+                    if type(missing) is int:
+                        pieces.append(f"未译或未采用 {missing:,} 项")
+                    fallback = draft.get("fallback_source_pages")
+                    if isinstance(fallback, list):
+                        pieces.append(f"整页原文 {len(fallback):,} 页")
+                    labels = draft.get("not_displayed_translated_label_count")
+                    if type(labels) is int:
+                        pieces.append(f"已存但显示原文的标签 {labels:,} 项")
+                    diagnostics = draft.get("source_diagnostics")
+                    if type(diagnostics) is int:
+                        pieces.append(f"来源待处理 {diagnostics:,} 项")
+                    if pieces:
+                        final_message = "；".join(pieces) + "。详见阅读稿检查清单。"
+                result["message"] = final_message
                 event = emit("finished", state, final_message)
                 result["metrics"].update(elapsed_seconds=event["elapsed_seconds"], elements_per_minute=event["elements_per_minute"], speed_elements_per_minute=event["elements_per_minute"])
                 _atomic_json(out / "autopilot_status.json", result)

@@ -1,0 +1,302 @@
+{
+  "schema": "rosen-convergence-aggregate-v1",
+  "recorded_at_utc": "2026-10-30T07:13:27.924725+00:00",
+  "source_revision": "source-v73",
+  "source_book_sha256": "7a53f1a7d787d3fa70af4601125add0b2e460fae36bdb7c461ce6f2d179ae9b5",
+  "translation_snapshot_time_utc": "2026-10-30T04:50:32.297641+00:00",
+  "rc7_baseline": {
+    "source_pages": 1118,
+    "page_count": 1462,
+    "required_translations": 28579,
+    "translated_elements": 26269,
+    "displayed_translated_elements": 25331,
+    "untranslated_elements": 2310,
+    "native_retained_label_count": 334,
+    "source_diagnostics": 1748,
+    "pdf_sha256": "0e73750afe770a12e27bb71081e3249b395a4b892082e8b5921af646537a7a86",
+    "fallback_source_page_count": 37,
+    "translated_labels_retained_original": 113,
+    "hidden_stored_translations": 938,
+    "pdf_bytes": 210896478
+  },
+  "revised_draft": {
+    "source_pages": 1118,
+    "page_count": 1446,
+    "required_translations": 28579,
+    "translated_elements": 26887,
+    "displayed_translated_elements": 26534,
+    "untranslated_elements": 1692,
+    "native_retained_label_count": 345,
+    "source_diagnostics": 1748,
+    "pdf_sha256": "cf11bf99f255c4d1a60271bd53bacc168e5c11673f982e58f1c03e0cb6862fd6",
+    "fallback_source_page_count": 11,
+    "translated_labels_retained_original": 145,
+    "hidden_stored_translations": 353,
+    "pdf_bytes": 210561540
+  },
+  "render_snapshot_filters": {
+    "rejection_counts": {
+      "stale_source": 41,
+      "stale_rule": 22,
+      "unresolved_current_revision_veto": 5
+    },
+    "warning_counts": {
+      "numeric_order_changed": 1
+    },
+    "current_accepted_required_before_filters": 26892
+  },
+  "retained_original_pages_by_failure_code_nonexclusive": {
+    "label_source_bounds": 7,
+    "oversized_source_unit": 1,
+    "detached_caption": 1,
+    "asset_out_of_page": 2
+  },
+  "layout_seconds": 1321.05,
+  "build_seconds": 1329.151,
+  "temporary_system_awake_request": {
+    "process_scoped": true,
+    "persistent_power_plan_changed": false,
+    "accepted": true,
+    "restored": true
+  },
+  "earlier_candidate_timing_diagnosis": {
+    "candidate_is_final_deliverable": false,
+    "candidate_layout_seconds": 5356.252,
+    "windows_modern_standby_seconds": 4206.022859,
+    "merge_and_save_difference_seconds": 10.304,
+    "same_input_speedup_or_regression_established": false,
+    "private_evidence_sha256": "c713ce7879be7a38b17b0b63ba7a2704156de0ddc7587d46034cca52558a8896"
+  },
+  "source_mapping": {
+    "original_pages": 1118,
+    "all_sources_and_actual_output_pages_mapped": true,
+    "independent_printed_page_number_verification_for_all_pages": false
+  },
+  "source_change": {
+    "changed_pages": [
+      396,
+      464
+    ],
+    "resolved_precise_warnings": 14,
+    "remaining_source_errors": 1748,
+    "whole_book_math_accepted": false
+  },
+  "remaining_input_gaps": {
+    "missing_or_not_adopted": 1692,
+    "currently_source_held": 1250,
+    "other_missing": 442,
+    "source_diagnostic_families": [
+      {
+        "name": "native_ink",
+        "diagnostics": 740,
+        "source_page_count": 279,
+        "current_missing_held_nonexclusive": 314
+      },
+      {
+        "name": "math_structure",
+        "diagnostics": 957,
+        "source_page_count": 269,
+        "current_missing_held_nonexclusive": 567
+      },
+      {
+        "name": "source_isolation_and_language",
+        "diagnostics": 18,
+        "source_page_count": 7,
+        "current_missing_held_nonexclusive": 184
+      },
+      {
+        "name": "reading_flow_and_full_units",
+        "diagnostics": 33,
+        "source_page_count": 32,
+        "current_missing_held_nonexclusive": 239
+      }
+    ],
+    "family_affected_missing_counts_overlap": true,
+    "other_missing_exclusive_prior_evidence_counts": {
+      "confirmed_numeric_equivalence_validator_false_positive": 17,
+      "current_candidate_validation_rejection": 78,
+      "joint_semantic_route_required": 1,
+      "outside_round_bounded_recovery_prior_source_safe_pending": 274,
+      "code_math_role_requires_source_review": 2,
+      "recovery_untranslated_candidate_requires_review": 2,
+      "recovery_numeric_candidate_risk_requires_original_review": 3,
+      "recovery_no_current_candidate_evidence": 56,
+      "semantic_rejected_current_revision": 1,
+      "render_current_revision_veto": 5,
+      "translation_identity_stale": 3
+    },
+    "other_task_claimability_requires_fresh_preflight": true,
+    "full_book_authorized_batch_scope_bounded_by_implementation": true,
+    "private_report_sha256": "c027a3d6870063523607d0da9ec5788a3ea6537d1aa3809f8dcea583b0fb1cc8"
+  },
+  "independent_semantic_sample": {
+    "items": 12,
+    "source_pages": 11,
+    "material_translation_errors_found": 0,
+    "source_risk_samples": 3,
+    "sample_hashes_match_final_translations": true,
+    "semantic_passes_written": 0,
+    "random_sample": false,
+    "human_review_claimed": false
+  },
+  "bounded_translation_recovery": {
+    "tasks_scheduled": 138,
+    "selected_missing_elements": 679,
+    "batches": 5,
+    "workers": 32,
+    "new_current_required": 618,
+    "requests": 288,
+    "failed_requests": 46,
+    "reported_input_tokens": 1706902,
+    "reported_output_tokens": 661818,
+    "calls_missing_usage": 46,
+    "executed_before_packet_progress_patch": true,
+    "packet_progress_patch_live_api_verification": false,
+    "actual_price_known": false,
+    "failed_history_reset": false,
+    "semantic_passes_copied": 0
+  },
+  "test_receipt": "source-regressions-20261030-convergence-v2.json",
+  "rebuild_api_calls": 0,
+  "rebuild_database_writes": 0,
+  "old_rc7_pdf_unchanged": true,
+  "whole_book_formula_pixels_checked": false,
+  "whole_book_semantics_accepted": false,
+  "whole_book_visual_acceptance": false,
+  "full_book_accepted": false,
+  "textbook_content_or_private_paths_included": false,
+  "final_output_risk_checks": {
+    "pdf_sha256": "cf11bf99f255c4d1a60271bd53bacc168e5c11673f982e58f1c03e0cb6862fd6",
+    "source_pages_selected": [
+      118,
+      153,
+      166,
+      330,
+      396,
+      403,
+      423,
+      464,
+      603,
+      617,
+      859,
+      904,
+      1049,
+      1055,
+      1085
+    ],
+    "independent_agent_visual_review": {
+      "risk_output_pngs_covered": 36,
+      "new_output_pngs_directly_viewed": 4,
+      "byte_identical_pngs_bound_to_prior_direct_review": 32,
+      "known_not_passed": [
+        {
+          "source_page": 118,
+          "summary": "习题7提示的平方对象歧义及正文公式跨行碎片。"
+        },
+        {
+          "source_page": 153,
+          "summary": "A³=与完整集合分离，未译内容仍存在。"
+        },
+        {
+          "source_page": 166,
+          "summary": "传记和Links插入多重集计算中间。"
+        },
+        {
+          "source_page": 330,
+          "summary": "求和上下限和模运算公式碎片及异常拉字。"
+        },
+        {
+          "source_page": 397,
+          "summary": "相邻图4仍散列、英文标签，不能沿用396图3的修复结论。"
+        },
+        {
+          "source_page": 403,
+          "summary": "阿克曼/分段式碎片及Link题内中断。"
+        },
+        {
+          "source_page": 404,
+          "summary": "5.4标题落在输出449页末，后续正文另页。"
+        },
+        {
+          "source_page": 423,
+          "summary": "多个完整公式关系仍被拆散及窄竖排。"
+        },
+        {
+          "source_page": 464,
+          "summary": "正文二项式/范围碎片、图注设计差异及未译历史段。"
+        },
+        {
+          "source_page": 603,
+          "summary": "整页原文保留，尚未恢复中文。"
+        },
+        {
+          "source_page": 617,
+          "summary": "题干/递推式窄竖排与碎片卡片。"
+        },
+        {
+          "source_page": 859,
+          "summary": "城市标签局部中英混合，图注/正文关联未完全恢复。"
+        },
+        {
+          "source_page": 904,
+          "summary": "电路图变量/输入输出关系散列。"
+        },
+        {
+          "source_page": 1048,
+          "summary": "与1049共享输出1307；答案续流有公式/题号碎片及较大留白，不能只按1049目标标签判断整页。"
+        },
+        {
+          "source_page": 1049,
+          "summary": "输出1307–1310中文整页回退已解除；1308–1310部门、鸟名、人名与图节点脱离、标签竖散、图边英文残词截边仍未通过。rc7实际输出1321–1323已有同类缺陷。"
+        },
+        {
+          "source_page": 1055,
+          "summary": "顶点数字脱图、棋盘题干与图位置分离。"
+        },
+        {
+          "source_page": 1085,
+          "summary": "状态图源裁片底部标签有裁切及答案碎片。"
+        }
+      ],
+      "root_output_pages_directly_viewed": [
+        439,
+        440,
+        519,
+        520,
+        1307,
+        1308,
+        1309,
+        1310,
+        1332
+      ],
+      "report_sha256": "b1bf05db6da977c37693db0418ced8631d0be83b0ccc8a715967f8ec646f30f9",
+      "human_visual_review_claimed": false,
+      "full_book_visual_acceptance": false
+    },
+    "protected_asset_crop_vs_final_pdf_pixels": {
+      "checked_occurrences": 761,
+      "automatically_passed_occurrences": 750,
+      "not_passed_occurrences": 11,
+      "eligible_measured_occurrences": 765,
+      "skipped_total": 25,
+      "limited": 0,
+      "issue_counts": {
+        "visual_asset_trace_missing": 21,
+        "visual_asset_ink_mismatch": 11,
+        "visual_asset_comparison_unavailable": 4
+      },
+      "issue_severities": {
+        "warning": 36
+      },
+      "report_sha256": "34c9d51189e671bc4f66c79cd0a8b2ca6ee07ecb6bb511c91823f7903ea671f7",
+      "triage_report_sha256": "0e1370d9408646beff0ebecf333921e7d4f9c2fad06fa8c14b3ec3ade4a7cd3b",
+      "manual_triage_converts_automatic_passes": false,
+      "certifies_original_crop_completeness": false,
+      "certifies_mathematical_meaning": false,
+      "whole_book_formula_acceptance": false
+    },
+    "reviewed_at_utc": "2026-10-30T07:24:09.666980+00:00",
+    "all_risk_pages_passed": false,
+    "full_book_acceptance": false
+  }
+}

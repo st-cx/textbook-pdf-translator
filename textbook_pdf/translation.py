@@ -1434,10 +1434,11 @@ def run_translation(book, store, config_path, provider=None, workers=4, review_p
                     signature = digest({"missing": decoded["missing_ids"], "invalid": {
                         eid: text for eid, text in decoded["translations"].items() if eid not in valid}})
                     if not valid and signature in failed_signatures:
-                        last_error = "Identical invalid output repeated; stopped paid retries, inspect source structure and validation diagnostics"
-                        issue("translation_no_progress", "相同无效译文重复返回，已停止重复请求；请检查原文结构及公式边界",
-                              task_id=task["id"])
-                        break
+                        last_error = "Identical invalid output repeated; this packet remains pending while distinct packets continue"
+                        issue("translation_no_progress", "本包相同无效译文重复返回，已停止本包重试并保留拒绝记录；继续其它完整元素包",
+                              task_id=task["id"], element_ids=requested)
+                        packets.popleft()
+                        continue
                     failed_signatures.add(signature)
                     result = store.submit(task["id"], owner, task["source_hash"], valid,
                                           provider=result_provider,
